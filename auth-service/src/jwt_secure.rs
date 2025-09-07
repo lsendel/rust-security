@@ -1,6 +1,10 @@
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use common::crypto::{JwtConfig, JwtAlgorithm};
+use chrono::Utc;
+use once_cell::sync::Lazy;
+use std::time::Duration;
 
 /// Secure JWT claims with comprehensive validation
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,7 +32,7 @@ pub enum TokenType {
 
 /// Create secure JWT validation with strict security constraints
 #[must_use]
-pub fn create_secure_jwt_validation() -> Validation {
+pub fn create_secure_jwt_validation(jwt_config: &JwtConfig) -> Validation {
     let mut validation = Validation::new(Algorithm::RS256);
 
     // Security constraints - ONLY allow RS256
@@ -47,17 +51,15 @@ pub fn create_secure_jwt_validation() -> Validation {
         "sub".to_string(),
     ]);
 
-    // Clock skew tolerance (5 minutes max)
-    validation.leeway = 300;
+    // Clock skew tolerance (5 minutes max) - use default 5 minutes
+    validation.leeway = 300; // 5 minutes in seconds
 
     // Set expected audience and issuer from environment
-    if let Ok(audience) = std::env::var("JWT_AUDIENCE") {
-        validation.set_audience(&[audience]);
+    if let Some(ref audiences) = jwt_config.audience {
+        validation.set_audience(audiences);
     }
 
-    if let Ok(issuer) = std::env::var("JWT_ISSUER") {
-        validation.set_issuer(&[issuer]);
-    }
+    validation.set_issuer(&[jwt_config.issuer.clone()]);
 
     validation
 }
@@ -80,6 +82,7 @@ pub fn validate_jwt_secure(
     token: &str,
     decoding_key: &DecodingKey,
     expected_token_type: TokenType,
+    jwt_config: &JwtConfig,
 ) -> Result<SecureJwtClaims, crate::shared::error::AppError> {
     // Decode header first to check algorithm
     let header = decode_header(token).map_err(|e| {
@@ -101,7 +104,7 @@ pub fn validate_jwt_secure(
     }
 
     // Validate token structure and signature
-    let validation = create_secure_jwt_validation();
+    let validation = create_secure_jwt_validation(jwt_config);
     let token_data = decode::<SecureJwtClaims>(token, decoding_key, &validation).map_err(|e| {
         crate::shared::error::AppError::InvalidToken(format!("JWT validation failed: {e}"))
     })?;
@@ -110,8 +113,8 @@ pub fn validate_jwt_secure(
 
     // Additional security validations
     validate_token_type(&claims, expected_token_type)?;
-    validate_token_freshness(&claims)?;
-    validate_token_structure(&claims)?;
+    validate_token_freshness(&claims, jwt_config)?;
+    validate_token_structure(&claims, jwt_config)?;
 
     Ok(claims)
 }
@@ -151,6 +154,7 @@ fn validate_token_type(
 /// Validate token freshness and timing
 fn validate_token_freshness(
     claims: &SecureJwtClaims,
+    jwt_config: &JwtConfig,
 ) -> Result<(), crate::shared::error::AppError> {
     let now = chrono::Utc::now().timestamp();
 
@@ -171,12 +175,8 @@ fn validate_token_freshness(
         ));
     }
 
-    // Check token age (prevent very old tokens)
-    let max_age = std::env::var("JWT_MAX_AGE_SECONDS")
-        .unwrap_or_else(|_| "86400".to_string()) // 24 hours default
-        .parse::<i64>()
-        .unwrap_or(86400);
-
+    // Check token age (prevent very old tokens) - use access token TTL
+    let max_age = jwt_config.access_token_ttl as i64;
     if now - claims.iat > max_age {
         return Err(crate::shared::error::AppError::InvalidToken(
             "Token too old".to_string(),
@@ -189,6 +189,7 @@ fn validate_token_freshness(
 /// Validate token structure and required fields
 fn validate_token_structure(
     claims: &SecureJwtClaims,
+    jwt_config: &JwtConfig,
 ) -> Result<(), crate::shared::error::AppError> {
     // Validate subject is not empty
     if claims.sub.is_empty() {
@@ -198,19 +199,19 @@ fn validate_token_structure(
     }
 
     // Validate issuer matches expected
-    let expected_issuer = std::env::var("JWT_ISSUER").unwrap_or_default();
-    if !expected_issuer.is_empty() && claims.iss != expected_issuer {
+    if claims.iss != jwt_config.issuer {
         return Err(crate::shared::error::AppError::InvalidToken(
             "Invalid issuer".to_string(),
         ));
     }
 
     // Validate audience matches expected
-    let expected_audience = std::env::var("JWT_AUDIENCE").unwrap_or_default();
-    if !expected_audience.is_empty() && claims.aud != expected_audience {
-        return Err(crate::shared::error::AppError::InvalidToken(
-            "Invalid audience".to_string(),
-        ));
+    if let Some(ref expected_audiences) = jwt_config.audience {
+        if !expected_audiences.contains(&claims.aud) {
+            return Err(crate::shared::error::AppError::InvalidToken(
+                "Invalid audience".to_string(),
+            ));
+        }
     }
 
     // Validate scope format if present
@@ -222,7 +223,6 @@ fn validate_token_structure(
         }
 
         // Check for dangerous patterns in scope
-        use once_cell::sync::Lazy;
         static DANGEROUS_PATTERNS: Lazy<[&str; 8]> = Lazy::new(|| {
             [
                 "javascript:",
@@ -253,8 +253,8 @@ fn validate_token_structure(
 ///
 /// This function currently never returns an error but uses Result for future compatibility
 /// with potential configuration loading failures
-pub fn create_oauth_access_token_validator() -> Result<Validation, crate::shared::error::AppError> {
-    let mut validation = create_secure_jwt_validation();
+pub fn create_oauth_access_token_validator(jwt_config: &JwtConfig) -> Validation {
+    let mut validation = create_secure_jwt_validation(jwt_config);
 
     // OAuth access tokens have specific requirements
     validation
@@ -262,7 +262,7 @@ pub fn create_oauth_access_token_validator() -> Result<Validation, crate::shared
         .insert("client_id".to_string());
     validation.required_spec_claims.insert("scope".to_string());
 
-    Ok(validation)
+    validation
 }
 
 /// Create ID token validator with OIDC requirements
@@ -271,36 +271,129 @@ pub fn create_oauth_access_token_validator() -> Result<Validation, crate::shared
 ///
 /// This function currently never returns an error but uses Result for future compatibility
 /// with potential configuration loading failures
-pub fn create_id_token_validator() -> Result<Validation, crate::shared::error::AppError> {
-    let mut validation = create_secure_jwt_validation();
+pub fn create_id_token_validator(jwt_config: &JwtConfig) -> Validation {
+    let mut validation = create_secure_jwt_validation(jwt_config);
 
     // ID tokens have specific OIDC requirements
     validation.required_spec_claims.insert("nonce".to_string());
 
-    Ok(validation)
+    validation
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use jsonwebtoken::{encode, Header, EncodingKey};
+    use std::time::{SystemTime, Duration};
+
+    fn create_test_claims(exp_offset_secs: i64, iat_offset_secs: i64) -> SecureJwtClaims {
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+        SecureJwtClaims {
+            sub: "test-user".to_string(),
+            iss: "test-issuer".to_string(),
+            aud: "test-audience".to_string(),
+            exp: now + exp_offset_secs,
+            iat: now + iat_offset_secs,
+            nbf: None,
+            jti: Some("test-jti".to_string()),
+            token_type: Some("access_token".to_string()),
+            scope: Some("read".to_string()),
+            nonce: None,
+            client_id: None,
+        }
+    }
 
     #[test]
     fn test_secure_jwt_validation_rejects_weak_algorithms() {
-        // This test would verify that only RS256 is accepted
-        // Implementation would create test tokens with different algorithms
-        // and verify they are rejected
+        let claims = create_test_claims(3600, 0);
+        let header = Header::new(Algorithm::HS256);
+        let token = encode(&header, &claims, &EncodingKey::from_secret("secret".as_ref())).unwrap();
+        let decoding_key = DecodingKey::from_secret("secret".as_ref());
+        let jwt_config = JwtConfig {
+            secret: "secret".to_string(),
+            issuer: "test-issuer".to_string(),
+            audience: Some(vec!["test-audience".to_string()]),
+            access_token_ttl: 3600,
+            refresh_token_ttl: 3600,
+            algorithm: common::crypto::JwtAlgorithm::RS256,
+            key_rotation_interval: 3600,
+            token_binding: false,
+            max_keys: 3,
+            enable_jwks: true,
+        };
+        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_token_freshness_validation() {
-        // Test that old tokens are rejected
-        // Test that future tokens are rejected
-        // Test that tokens within valid time window are accepted
+        let decoding_key = DecodingKey::from_secret("secret".as_ref());
+        let encoding_key = EncodingKey::from_secret("secret".as_ref());
+        let jwt_config = JwtConfig {
+            secret: "secret".to_string(),
+            issuer: "test-issuer".to_string(),
+            audience: Some(vec!["test-audience".to_string()]),
+            access_token_ttl: 3600,
+            refresh_token_ttl: 3600,
+            algorithm: common::crypto::JwtAlgorithm::HS256,
+            key_rotation_interval: 3600,
+            token_binding: false,
+            max_keys: 3,
+            enable_jwks: true,
+        };
+
+        // Expired token
+        let claims = create_test_claims(-3600, -7200);
+        let header = Header::new(Algorithm::HS256);
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        assert!(result.is_err());
+
+        // Token issued in the future
+        let claims = create_test_claims(3600, 3600);
+        let header = Header::new(Algorithm::HS256);
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_token_type_validation() {
-        // Test that access tokens require proper type
-        // Test that ID tokens require nonce
-        // Test that refresh tokens have proper type
+        let decoding_key = DecodingKey::from_secret("secret".as_ref());
+        let encoding_key = EncodingKey::from_secret("secret".as_ref());
+        let jwt_config = JwtConfig {
+            secret: "secret".to_string(),
+            issuer: "test-issuer".to_string(),
+            audience: Some(vec!["test-audience".to_string()]),
+            access_token_ttl: 3600,
+            refresh_token_ttl: 3600,
+            algorithm: common::crypto::JwtAlgorithm::RS256,
+            key_rotation_interval: 3600,
+            token_binding: false,
+            max_keys: 3,
+            enable_jwks: true,
+        };
+
+        // Valid access token
+        let claims = create_test_claims(3600, 0);
+        let header = Header::new(Algorithm::HS256);
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        assert!(result.is_ok());
+
+        // ID token missing nonce
+        let mut claims = create_test_claims(3600, 0);
+        claims.token_type = Some("id_token".to_string());
+        let header = Header::new(Algorithm::HS256);
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+        let result = validate_jwt_secure(&token, &decoding_key, TokenType::IdToken, &jwt_config);
+        assert!(result.is_err());
+
+        // Valid ID token with nonce
+        claims.nonce = Some("test-nonce".to_string());
+        let header = Header::new(Algorithm::HS256);
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+        let result = validate_jwt_secure(&token, &decoding_key, TokenType::IdToken, &jwt_config);
+        assert!(result.is_ok());
     }
 }
