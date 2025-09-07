@@ -39,7 +39,7 @@ impl Default for JwtConfig {
     /// Secure JWT defaults
     ///
     /// - 15 minute access tokens (900 seconds)
-    /// - 24 hour refresh tokens (86400 seconds)  
+    /// - 24 hour refresh tokens (86400 seconds)
     /// - HS256 algorithm (secure and widely supported)
     /// - Token binding enabled for additional security
     fn default() -> Self {
@@ -227,16 +227,23 @@ impl UnifiedSecurityConfig {
     ///
     /// # Warning
     /// This configuration is NOT secure and must not be used in production!
+    #[allow(clippy::panic)]
     pub fn development() -> Self {
         Self {
             jwt: JwtConfig {
-                secret: "development-jwt-secret-32-chars-min".to_string(),
+                secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+                    panic!("JWT_SECRET environment variable must be set for development")
+                }),
                 access_token_ttl_seconds: 3600, // 1 hour for development convenience
                 refresh_token_ttl_seconds: 86400, // 24 hours
                 ..Default::default()
             },
             request_signing: RequestSigningConfig {
-                secret: "development-request-signing-secret-32-chars".to_string(),
+                secret: std::env::var("REQUEST_SIGNING_SECRET").unwrap_or_else(|_| {
+                    panic!(
+                        "REQUEST_SIGNING_SECRET environment variable must be set for development"
+                    )
+                }),
                 enabled: false, // Disabled for development convenience
                 ..Default::default()
             },

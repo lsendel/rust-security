@@ -298,7 +298,7 @@ mod tests {
     fn test_secure_configuration_valid() {
         std::env::set_var(
             "JWT_SECRET",
-            "very-secure-secret-key-at-least-32-characters-long",
+            "very-secure-jwt-key-at-least-32-characters-long-abcdef",
         );
         std::env::set_var("APP_ENV", "development");
         std::env::set_var("ENABLE_MFA", "true");

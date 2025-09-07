@@ -519,28 +519,66 @@ impl Default for UnifiedCryptoManager {
     ///
     /// Creates a default AES-256-GCM crypto manager.
     /// Returns a manager with fallback error handling if creation fails.
+    #[allow(clippy::panic, clippy::expect_used)]
     fn default() -> Self {
-        Self::new_aes().unwrap_or_else(|_| {
-            // Fallback: Try ChaCha20-Poly1305 if AES fails
-            Self::new_chacha().unwrap_or_else(|_| {
-                // Last resort: Create with minimal configuration using AES-256-GCM
-                let key_bytes = [0u8; 32]; // This should be replaced with proper key derivation
-                let unbound_key = UnboundKey::new(&AES_256_GCM, &key_bytes).unwrap();
-                let key = LessSafeKey::new(unbound_key);
+        Self::new_aes().unwrap_or_else(|e| {
+            eprintln!("WARNING: Failed to create AES crypto manager: {:?}", e);
+            Self::new_chacha().unwrap_or_else(|e| {
+                eprintln!("WARNING: Failed to create ChaCha crypto manager: {:?}", e);
+                // Last resort: Create with system entropy or panic
+                let rng = SystemRandom::new();
+                let mut key_bytes = [0u8; 32];
+                rng.fill(&mut key_bytes).unwrap_or_else(|e| {
+                    eprintln!("CRITICAL: System RNG failed: {:?}", e);
+                    panic!("Unable to generate secure encryption key - system entropy unavailable");
+                });
 
-                let crypto_key = CryptoKey {
-                    key,
-                    algorithm: SymmetricAlgorithm::Aes256Gcm,
-                    version: 1,
-                    created_at: chrono::Utc::now(),
-                };
+                // Try AES first, then ChaCha as fallback
+                match UnboundKey::new(&AES_256_GCM, &key_bytes) {
+                    Ok(unbound_key) => {
+                        let key = LessSafeKey::new(unbound_key);
+                        let crypto_key = CryptoKey {
+                            key,
+                            algorithm: SymmetricAlgorithm::Aes256Gcm,
+                            version: 1,
+                            created_at: chrono::Utc::now(),
+                        };
 
-                Self {
-                    current_key: Arc::new(RwLock::new(crypto_key)),
-                    old_keys: Arc::new(RwLock::new(HashMap::new())),
-                    rng: SystemRandom::new(),
-                    _default_algorithm: SymmetricAlgorithm::Aes256Gcm,
-                    key_rotation_interval: chrono::Duration::hours(24),
+                        Self {
+                            current_key: Arc::new(RwLock::new(crypto_key)),
+                            old_keys: Arc::new(RwLock::new(HashMap::new())),
+                            rng: SystemRandom::new(),
+                            _default_algorithm: SymmetricAlgorithm::Aes256Gcm,
+                            key_rotation_interval: chrono::Duration::hours(24),
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("CRITICAL: Failed to create AES encryption key: {:?}", e);
+                        // Create a fallback with ChaCha20-Poly1305 instead of panicking
+                        match UnboundKey::new(&CHACHA20_POLY1305, &key_bytes) {
+                            Ok(unbound_key) => {
+                                let key = LessSafeKey::new(unbound_key);
+                                let crypto_key = CryptoKey {
+                                    key,
+                                    algorithm: SymmetricAlgorithm::ChaCha20Poly1305,
+                                    version: 1,
+                                    created_at: chrono::Utc::now(),
+                                };
+
+                                Self {
+                                    current_key: Arc::new(RwLock::new(crypto_key)),
+                                    old_keys: Arc::new(RwLock::new(HashMap::new())),
+                                    rng: SystemRandom::new(),
+                                    _default_algorithm: SymmetricAlgorithm::ChaCha20Poly1305,
+                                    key_rotation_interval: chrono::Duration::hours(24),
+                                }
+                            }
+                            Err(e2) => {
+                                eprintln!("CRITICAL: Failed to create any encryption key AES:{:?} ChaCha:{:?} - system may be compromised", e, e2);
+                                panic!("Unable to create secure encryption key - system entropy or crypto library unavailable");
+                            }
+                        }
+                    }
                 }
             })
         })
@@ -548,6 +586,7 @@ impl Default for UnifiedCryptoManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)] // Tests use expect() to fail fast on errors
 mod tests {
     use super::*;
 

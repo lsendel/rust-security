@@ -65,7 +65,17 @@ impl PasswordService {
             config.parallelism,
             Some(config.output_length),
         )
-        .expect("Invalid Argon2 parameters");
+        .unwrap_or_else(|_| {
+            // Fallback to safe defaults if parameters are invalid
+            let defaults = PasswordHashConfig::default();
+            Params::new(
+                defaults.memory_cost,
+                defaults.time_cost,
+                defaults.parallelism,
+                Some(defaults.output_length),
+            )
+            .expect("OWASP defaults must be valid")
+        });
 
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 

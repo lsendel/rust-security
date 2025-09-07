@@ -99,11 +99,11 @@ impl CryptoOptimized {
         metrics.total_duration += operation_duration;
 
         if metrics.total_operations > 0 {
-            metrics.avg_operation_time =
-                metrics.total_duration / u32::try_from(metrics.total_operations).unwrap_or(1);
+            let ops_count =
+                u32::try_from(metrics.total_operations).unwrap_or(u32::MAX.saturating_sub(1));
+            metrics.avg_operation_time = metrics.total_duration / ops_count;
             metrics.operations_per_second =
-                f64::from(u32::try_from(metrics.total_operations).unwrap_or(0))
-                    / metrics.total_duration.as_secs_f64();
+                f64::from(ops_count) / metrics.total_duration.as_secs_f64();
         }
 
         // Update cache hit rate (simple moving average)
@@ -143,15 +143,19 @@ impl CryptoOptimized {
         key_id: &str,
         data: &[u8],
     ) -> Result<Vec<u8>, ring::error::Unspecified> {
-        let tag = {
-            let key = self.hmac_keys.entry(key_id.to_string()).or_insert_with(|| {
-                let mut key_bytes = [0u8; 32];
-                self.rng.fill(&mut key_bytes).unwrap();
-                hmac::Key::new(hmac::HMAC_SHA256, &key_bytes)
-            });
-
-            hmac::sign(&key, data)
+        // Get or create HMAC key with proper error handling
+        let key = if let Some(existing_key) = self.hmac_keys.get(key_id) {
+            existing_key.clone()
+        } else {
+            // Create new key material
+            let mut key_bytes = [0u8; 32];
+            self.rng.fill(&mut key_bytes)?;
+            let new_key = hmac::Key::new(hmac::HMAC_SHA256, &key_bytes);
+            self.hmac_keys.insert(key_id.to_string(), new_key.clone());
+            new_key
         };
+
+        let tag = hmac::sign(&key, data);
         Ok(tag.as_ref().to_vec())
     }
 
@@ -338,10 +342,9 @@ impl CryptoOptimized {
     /// return errors for valid parameters, but the Result type is preserved for
     /// API consistency.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `iterations` is 0, as `NonZeroU32::new(iterations).unwrap()`
-    /// will panic when called with 0.
+    /// Returns `ring::error::Unspecified` if `iterations` is 0.
     pub fn derive_key(
         &self,
         password: &[u8],
@@ -349,9 +352,11 @@ impl CryptoOptimized {
         iterations: u32,
     ) -> Result<[u8; 32], ring::error::Unspecified> {
         let mut key = [0u8; 32];
+        let iterations_nonzero =
+            std::num::NonZeroU32::new(iterations).ok_or(ring::error::Unspecified)?;
         ring::pbkdf2::derive(
             ring::pbkdf2::PBKDF2_HMAC_SHA256,
-            std::num::NonZeroU32::new(iterations).unwrap(),
+            iterations_nonzero,
             salt,
             password,
             &mut key,

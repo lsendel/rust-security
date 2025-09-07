@@ -1,4 +1,4 @@
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -212,7 +212,9 @@ pub async fn add_configurable_security_headers(
     let headers = response.headers_mut();
 
     // Content Security Policy
-    headers.insert("Content-Security-Policy", config.csp.parse().unwrap());
+    if let Ok(csp_value) = config.csp.parse() {
+        headers.insert("Content-Security-Policy", csp_value);
+    }
 
     // HTTP Strict Transport Security
     let hsts_value = if config.hsts_include_subdomains && config.hsts_preload {
@@ -225,65 +227,80 @@ pub async fn add_configurable_security_headers(
     } else {
         format!("max-age={}", config.hsts_max_age)
     };
-    headers.insert("Strict-Transport-Security", hsts_value.parse().unwrap());
+    if let Ok(hsts_header_value) = hsts_value.parse() {
+        headers.insert("Strict-Transport-Security", hsts_header_value);
+    }
 
     // X-Frame-Options
-    headers.insert("X-Frame-Options", config.frame_options.parse().unwrap());
+    if let Ok(frame_options_value) = config.frame_options.parse() {
+        headers.insert("X-Frame-Options", frame_options_value);
+    }
 
     // X-Content-Type-Options
     if config.content_type_options {
-        headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+        headers.insert(
+            "X-Content-Type-Options",
+            HeaderValue::from_static("nosniff"),
+        );
     }
 
     // X-XSS-Protection
-    headers.insert("X-XSS-Protection", config.xss_protection.parse().unwrap());
+    if let Ok(xss_protection_value) = config.xss_protection.parse() {
+        headers.insert("X-XSS-Protection", xss_protection_value);
+    }
 
     // Referrer-Policy
-    headers.insert("Referrer-Policy", config.referrer_policy.parse().unwrap());
+    if let Ok(referrer_value) = config.referrer_policy.parse() {
+        headers.insert("Referrer-Policy", referrer_value);
+    }
 
     // Permissions-Policy
-    headers.insert(
-        "Permissions-Policy",
-        config.permissions_policy.parse().unwrap(),
-    );
+    if let Ok(permissions_value) = config.permissions_policy.parse() {
+        headers.insert("Permissions-Policy", permissions_value);
+    }
 
     // Cross-Origin policies
-    headers.insert("Cross-Origin-Embedder-Policy", config.coep.parse().unwrap());
-    headers.insert("Cross-Origin-Opener-Policy", config.coop.parse().unwrap());
-    headers.insert("Cross-Origin-Resource-Policy", config.corp.parse().unwrap());
+    if let Ok(coep_value) = config.coep.parse() {
+        headers.insert("Cross-Origin-Embedder-Policy", coep_value);
+    }
+    if let Ok(coop_value) = config.coop.parse() {
+        headers.insert("Cross-Origin-Opener-Policy", coop_value);
+    }
+    if let Ok(corp_value) = config.corp.parse() {
+        headers.insert("Cross-Origin-Resource-Policy", corp_value);
+    }
 
     // Additional modern security headers
-    headers.insert("X-Permitted-Cross-Domain-Policies", "none".parse().unwrap());
-    headers.insert("X-DNS-Prefetch-Control", "off".parse().unwrap());
-    headers.insert("X-Download-Options", "noopen".parse().unwrap());
+    headers.insert(
+        "X-Permitted-Cross-Domain-Policies",
+        HeaderValue::from_static("none"),
+    );
+    headers.insert("X-DNS-Prefetch-Control", HeaderValue::from_static("off"));
+    headers.insert("X-Download-Options", HeaderValue::from_static("noopen"));
 
     // Server identification (minimal information disclosure)
-    headers.insert("Server", "AuthService/1.0".parse().unwrap());
+    headers.insert("Server", HeaderValue::from_static("AuthService/1.0"));
 
     // Cache control for sensitive endpoints
     if config.cache_control {
         headers.insert(
             "Cache-Control",
-            "no-store, no-cache, must-revalidate, private, max-age=0"
-                .parse()
-                .unwrap(),
+            HeaderValue::from_static("no-store, no-cache, must-revalidate, private, max-age=0"),
         );
-        headers.insert("Pragma", "no-cache".parse().unwrap());
-        headers.insert("Expires", "0".parse().unwrap());
+        headers.insert("Pragma", HeaderValue::from_static("no-cache"));
+        headers.insert("Expires", HeaderValue::from_static("0"));
     }
 
     // Add monitoring headers
     if config.monitoring_headers {
         if let Ok(timestamp) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            headers.insert(
-                "X-Response-Time",
-                timestamp.as_secs().to_string().parse().unwrap(),
-            );
+            if let Ok(timestamp_value) = timestamp.as_secs().to_string().parse() {
+                headers.insert("X-Response-Time", timestamp_value);
+            }
         }
-        headers.insert(
-            "X-Request-ID",
-            uuid::Uuid::new_v4().to_string().parse().unwrap(),
-        );
+        if let Ok(uuid_value) = uuid::Uuid::new_v4().to_string().parse() {
+            headers.insert("X-Request-ID", uuid_value);
+        }
     }
 
     response
@@ -307,84 +324,80 @@ pub async fn add_legacy_security_headers(request: Request, next: Next) -> Respon
     // Content Security Policy - Strict policy for security applications
     headers.insert(
         "Content-Security-Policy",
-        "default-src 'none'; \
-         frame-ancestors 'none'; \
-         base-uri 'none'"
-            .parse()
-            .unwrap(),
+        HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; base-uri 'none'"),
     );
 
     // Strict Transport Security - Force HTTPS for 1 year
     headers.insert(
         "Strict-Transport-Security",
-        "max-age=31536000; includeSubDomains; preload"
-            .parse()
-            .unwrap(),
+        HeaderValue::from_static("max-age=31536000; includeSubDomains; preload"),
     );
 
     // Prevent clickjacking
-    headers.insert("X-Frame-Options", "DENY".parse().unwrap());
+    headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
 
     // Prevent MIME type sniffing
-    headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
 
     // XSS Protection (legacy but still useful)
     // Keep legacy X-XSS-Protection header for backward compatibility with existing clients/tests
-    headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
+    headers.insert(
+        "X-XSS-Protection",
+        HeaderValue::from_static("1; mode=block"),
+    );
 
     // Referrer Policy - Limit referrer information
     headers.insert(
         "Referrer-Policy",
-        "strict-origin-when-cross-origin".parse().unwrap(),
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
 
     // Permissions Policy - Restrict browser features
     headers.insert(
         "Permissions-Policy",
-        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), \
-         magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=(), \
-         autoplay=(), encrypted-media=(), fullscreen=(), picture-in-picture=()"
-            .parse()
-            .unwrap(),
+        HeaderValue::from_static("camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=(), autoplay=(), encrypted-media=(), fullscreen=(), picture-in-picture=()"),
     );
 
     // Cross-Origin Embedder Policy
     headers.insert(
         "Cross-Origin-Embedder-Policy",
-        "require-corp".parse().unwrap(),
+        HeaderValue::from_static("require-corp"),
     );
 
     // Cross-Origin Opener Policy
-    headers.insert("Cross-Origin-Opener-Policy", "same-origin".parse().unwrap());
+    headers.insert(
+        "Cross-Origin-Opener-Policy",
+        HeaderValue::from_static("same-origin"),
+    );
 
     // Cross-Origin Resource Policy
     headers.insert(
         "Cross-Origin-Resource-Policy",
-        "same-origin".parse().unwrap(),
+        HeaderValue::from_static("same-origin"),
     );
 
     // Server identification (minimal information disclosure)
-    headers.insert("Server", "AuthService/1.0".parse().unwrap());
+    headers.insert("Server", HeaderValue::from_static("AuthService/1.0"));
 
     // Cache control for sensitive endpoints
     // Avoid borrowing response immutably again; check based on header presence instead
     if headers_present {
         headers.insert(
             "Cache-Control",
-            "no-store, no-cache, must-revalidate, private, max-age=0"
-                .parse()
-                .unwrap(),
+            HeaderValue::from_static("no-store, no-cache, must-revalidate, private, max-age=0"),
         );
-        headers.insert("Pragma", "no-cache".parse().unwrap());
-        headers.insert("Expires", "0".parse().unwrap());
+        headers.insert("Pragma", HeaderValue::from_static("no-cache"));
+        headers.insert("Expires", HeaderValue::from_static("0"));
     }
 
     // Add timestamp for security monitoring
     if let Ok(timestamp) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        headers.insert(
-            "X-Response-Time",
-            timestamp.as_secs().to_string().parse().unwrap(),
-        );
+        if let Ok(timestamp_value) = timestamp.as_secs().to_string().parse() {
+            headers.insert("X-Response-Time", timestamp_value);
+        }
     }
 
     response
@@ -397,43 +410,45 @@ pub async fn add_api_security_headers(request: Request, next: Next) -> Response 
     let headers = response.headers_mut();
 
     // API-specific security headers
-    headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
-    headers.insert("X-Frame-Options", "DENY".parse().unwrap());
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
 
     // Prevent caching of API responses
     headers.insert(
         "Cache-Control",
-        "no-store, no-cache, must-revalidate, private, max-age=0"
-            .parse()
-            .unwrap(),
+        HeaderValue::from_static("no-store, no-cache, must-revalidate, private, max-age=0"),
     );
 
     // Secure CORS headers for API (restrictive by default)
     // Only allow specific origins, not wildcard
     headers.insert(
         "Access-Control-Allow-Origin",
-        "null".parse().unwrap(), // Will be overridden by CORS middleware if configured
+        HeaderValue::from_static("null"), // Will be overridden by CORS middleware if configured
     );
 
     headers.insert(
         "Access-Control-Allow-Methods",
-        "GET, POST, OPTIONS".parse().unwrap(),
+        HeaderValue::from_static("GET, POST, OPTIONS"),
     );
 
     headers.insert(
         "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, X-Requested-With"
-            .parse()
-            .unwrap(),
+        HeaderValue::from_static("Content-Type, Authorization, X-Requested-With"),
     );
 
     headers.insert(
         "Access-Control-Max-Age",
-        "3600".parse().unwrap(), // Reduced to 1 hour for better security
+        HeaderValue::from_static("3600"), // Reduced to 1 hour for better security
     );
 
     // Ensure credentials are not allowed by default
-    headers.insert("Access-Control-Allow-Credentials", "false".parse().unwrap());
+    headers.insert(
+        "Access-Control-Allow-Credentials",
+        HeaderValue::from_static("false"),
+    );
 
     response
 }
@@ -447,19 +462,22 @@ pub fn add_rate_limit_headers(
 ) {
     let headers = response.headers_mut();
 
-    headers.insert("X-RateLimit-Limit", limit.to_string().parse().unwrap());
+    if let Ok(limit_value) = limit.to_string().parse() {
+        headers.insert("X-RateLimit-Limit", limit_value);
+    }
 
-    headers.insert(
-        "X-RateLimit-Remaining",
-        remaining.to_string().parse().unwrap(),
-    );
+    if let Ok(remaining_value) = remaining.to_string().parse() {
+        headers.insert("X-RateLimit-Remaining", remaining_value);
+    }
 
-    headers.insert("X-RateLimit-Reset", reset_time.to_string().parse().unwrap());
+    if let Ok(reset_value) = reset_time.to_string().parse() {
+        headers.insert("X-RateLimit-Reset", reset_value);
+    }
 
     if remaining == 0 {
         headers.insert(
             "Retry-After",
-            "60".parse().unwrap(), // Retry after 1 minute
+            HeaderValue::from_static("60"), // Retry after 1 minute
         );
     }
 }
@@ -511,9 +529,12 @@ mod tests {
         let request = Request::builder()
             .uri("/api/test")
             .body(Body::empty())
-            .unwrap();
+            .expect("Failed to build test request");
 
-        let response = app.oneshot(request).await.unwrap();
+        let response = app
+            .oneshot(request)
+            .await
+            .expect("Failed to execute request");
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -522,7 +543,9 @@ mod tests {
         assert!(headers.contains_key("Access-Control-Allow-Origin"));
         assert!(headers.contains_key("Access-Control-Allow-Methods"));
         assert_eq!(
-            headers.get("Access-Control-Allow-Credentials").unwrap(),
+            headers
+                .get("Access-Control-Allow-Credentials")
+                .expect("Missing Access-Control-Allow-Credentials header"),
             "false"
         );
     }

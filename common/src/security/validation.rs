@@ -517,6 +517,7 @@ impl UnifiedSecurityConfig {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::panic)]
     use super::*;
 
     fn create_valid_config() -> UnifiedSecurityConfig {

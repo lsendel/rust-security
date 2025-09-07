@@ -58,28 +58,59 @@ static ALLOWED_ATTRIBUTES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 // SQL injection patterns - enhanced detection
 static SQL_INJECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r"(?i)\b(select|insert|update|delete|drop|create|alter|exec|execute|union|script|declare|cursor|fetch|bulk|backup|restore)\b").unwrap(),
-        Regex::new(r"(?i)(--|/\*|\*/|;|@@|@|\bxp_)").unwrap(),
-        Regex::new(r"(?i)\b(or|and)\s+\d+\s*=\s*\d+").unwrap(),
-        Regex::new(r"(?i)\b(or|and)\s+'[^']*'\s*=\s*'[^']*'").unwrap(),
-        Regex::new(r"(?i)\bunion\s+(all\s+)?select").unwrap(),
+        {
+            #[allow(clippy::unwrap_used)] Regex::new(r"(?i)\b(select|insert|update|delete|drop|create|alter|exec|execute|union|script|declare|cursor|fetch|bulk|backup|restore)\b").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)(--|/\*|\*/|;|@@|@|\bxp_)").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)\b(or|and)\s+\d+\s*=\s*\d+").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)\b(or|and)\s+'[^']*'\s*=\s*'[^']*'").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)\bunion\s+(all\s+)?select").unwrap()
+        },
     ]
 });
 
 // XSS patterns - enhanced detection
 static XSS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r"(?i)<\s*script").unwrap(),
-        Regex::new(r"(?i)javascript\s*:").unwrap(),
-        Regex::new(r"(?i)on\w+\s*=").unwrap(),
-        Regex::new(r"(?i)expression\s*\(").unwrap(),
-        Regex::new(r"(?i)eval\s*\(").unwrap(),
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)<\s*script").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)javascript\s*:").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)on\w+\s*=").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)expression\s*\(").unwrap()
+        },
+        {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"(?i)eval\s*\(").unwrap()
+        },
     ]
 });
 
 // Valid value pattern - alphanumeric, spaces, and common symbols
-static VALID_VALUE_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9\s\.\-_@\+\(\)]*$").unwrap());
+static VALID_VALUE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    #[allow(clippy::unwrap_used)]
+    Regex::new(r"^[a-zA-Z0-9\s\.\-_@\+\(\)]*$").unwrap()
+});
 
 /// Enhanced SCIM filter parser with comprehensive security validation
 ///

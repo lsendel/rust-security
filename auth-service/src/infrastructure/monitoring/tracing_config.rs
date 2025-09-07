@@ -18,7 +18,7 @@ use uuid::Uuid;
 ///
 /// # Errors
 /// Returns an error if:
-/// - `OpenTelemetry` tracer pipeline fails to initialize  
+/// - `OpenTelemetry` tracer pipeline fails to initialize
 /// - Jaeger agent connection fails
 /// - Tracing subscriber configuration is invalid
 pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -616,13 +616,14 @@ mod tests {
     #[test]
     fn test_request_context_from_headers() {
         let mut headers = HeaderMap::new();
-        headers.insert("x-request-id", "test-request-id".parse().unwrap());
-        headers.insert("x-correlation-id", "test-correlation-id".parse().unwrap());
+        headers.insert("x-request-id", HeaderValue::from_static("test-request-id"));
+        headers.insert(
+            "x-correlation-id",
+            HeaderValue::from_static("test-correlation-id"),
+        );
         headers.insert(
             "traceparent",
-            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
-                .parse()
-                .unwrap(),
+            HeaderValue::from_static("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),
         );
 
         let context = RequestContext::from_headers(&headers);

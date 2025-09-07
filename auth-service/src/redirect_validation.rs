@@ -23,6 +23,7 @@ pub struct RedirectUriValidator {
 }
 
 // Suspicious patterns to detect in URIs
+#[allow(clippy::expect_used)] // Static regex patterns that should always compile
 static SUSPICIOUS_PATTERNS: std::sync::LazyLock<Vec<Regex>> = std::sync::LazyLock::new(|| {
     vec![
         Regex::new(r"\.\.[\\/]").expect("Path traversal regex should compile"),
@@ -287,9 +288,11 @@ impl RedirectUriValidator {
     /// Check for encoded attack patterns
     #[allow(clippy::unused_self)]
     fn contains_encoded_attacks(&self, uri: &str) -> bool {
+        #[allow(clippy::expect_used)] // URL decoding should always succeed for valid URIs
         let decoded = urlencoding::decode(uri).unwrap_or_default();
 
         // Check for double encoding
+        #[allow(clippy::expect_used)] // Double decoding should always succeed
         let double_decoded = urlencoding::decode(&decoded).unwrap_or_default();
         if decoded != double_decoded {
             return true;

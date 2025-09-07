@@ -10,6 +10,8 @@ keywords = ["security", "red-team", "penetration-testing", "cybersecurity"]
 categories = ["command-line-utilities", "development-tools::testing"]
 readme = "README.md"
 
+[workspace]
+
 [dependencies]
 # Core async runtime with signal handling for graceful shutdown
 tokio = { version = "1.37", features = ["full", "signal"] }
@@ -28,10 +30,10 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 
 # Security-focused dependencies with workspace versions
-base64 = { version = "1.0" }
+base64 = { version = "0.22" }
 url = "2.5"  # Keep local version
 urlencoding = "2.1"  # Keep local version
-async-trait = { version = "1.0" }
+async-trait = { version = "0.1" }
 
 # Command line and utilities
 clap = "4.0"
@@ -39,7 +41,13 @@ colored = "2.1.0"  # Keep compatible version
 tabular = "0.2"  # Keep local version
 
 # Integration dependencies with security focus
-config = { version = "1.0" }
+config = { version = "0.14" }
+
+# SIEM Integration dependencies - using HTTP clients for flexibility
+# rdkafka = { version = "0.36", optional = true }
+# rumqttc = { version = "0.24", optional = true }
+# opentelemetry = { version = "0.22", optional = true }
+# elasticsearch = { version = "8.5", optional = true }
 
 [features]
 # Default features for basic red team operations
@@ -47,15 +55,22 @@ default = ["basic-attacks"]
 
 # Attack categories
 basic-attacks = []
-network-attacks = ["dep:hickory-resolver"]
-crypto-attacks = ["dep:ring", "dep:jsonwebtoken"]
-cloud-attacks = ["dep:aws-sdk-s3", "dep:aws-config", "dep:aws-sdk-sqs"]
-data-attacks = ["dep:rdkafka", "dep:serde-xml-rs"]
-social-attacks = ["dep:slack-morphism", "dep:webhook"]
+network-attacks = []
+crypto-attacks = []
+cloud-attacks = []
+data-attacks = []
+social-attacks = []
+
+# SIEM Integration features - using HTTP-based integration
+siem-integration = []
+elastic-integration = ["siem-integration"]
+splunk-integration = ["siem-integration"]
+all-siem = ["elastic-integration", "splunk-integration"]
 
 # Development and testing
-benchmarks = ["dep:criterion"]
+benchmarks = []
 all-attacks = ["network-attacks", "crypto-attacks", "cloud-attacks", "data-attacks", "social-attacks"]
+full-security-platform = ["all-attacks", "all-siem"]
 
 # Security-focused lints
 [lints]
@@ -80,6 +95,7 @@ codegen-units = 1
 # Development dependencies
 [dev-dependencies]
 pretty_assertions = "1.4"
-tokio-test = { version = "1.0" }
-tempfile = { version = "1.0" }
-wiremock = { version = "1.0" }
+tokio-test = { version = "0.4" }
+tempfile = { version = "3.0" }
+wiremock = { version = "0.6" }
+criterion = { version = "0.5" }

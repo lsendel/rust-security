@@ -231,6 +231,16 @@ where
 }
 
 #[cfg(test)]
+pub fn enable_test_mode_for_testing() {
+    TEST_MODE_ENABLED.store(true, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub fn disable_test_mode_for_testing() {
+    TEST_MODE_ENABLED.store(false, Ordering::SeqCst);
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -253,18 +263,20 @@ mod tests {
 
     #[test]
     fn test_development_mode() {
-        // Clear production env
-        std::env::remove_var("RUST_ENV");
+        // Clear production env and set development
+        std::env::set_var("RUST_ENV", "development");
         std::env::remove_var("ENVIRONMENT");
 
         // Set test mode
         std::env::set_var("TEST_MODE", "1");
+        enable_test_mode_for_testing();
 
         // Should work in development
         assert!(is_test_mode());
 
         // Cleanup
         std::env::remove_var("TEST_MODE");
+        disable_test_mode_for_testing();
     }
 
     #[test]

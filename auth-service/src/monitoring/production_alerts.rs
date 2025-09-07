@@ -89,7 +89,7 @@ pub enum ImpactSeverity {
 }
 
 /// SLA metrics tracking
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SlaMetrics {
     pub uptime_percent: f64,
     pub avg_response_time_ms: f64,
@@ -494,9 +494,39 @@ impl ProductionMonitor {
 
     /// Get current production status
     pub fn get_production_status(&self) -> ProductionStatus {
-        let alerts = self.alerts.lock().unwrap();
-        let metrics = self.metrics.lock().unwrap();
-        let health_checks = self.health_checks.lock().unwrap();
+        let alerts = match self.alerts.lock() {
+            Ok(guard) => guard,
+            Err(_) => return ProductionStatus {
+                overall_health: SystemHealth::Critical,
+                sla_metrics: SlaMetrics::default(),
+                active_alerts: 0,
+                critical_alerts: 0,
+                services_healthy: 0,
+                services_total: 0,
+            },
+        };
+        let metrics = match self.metrics.lock() {
+            Ok(guard) => guard,
+            Err(_) => return ProductionStatus {
+                overall_health: SystemHealth::Critical,
+                sla_metrics: SlaMetrics::default(),
+                active_alerts: 0,
+                critical_alerts: 0,
+                services_healthy: 0,
+                services_total: 0,
+            },
+        };
+        let health_checks = match self.health_checks.lock() {
+            Ok(guard) => guard,
+            Err(_) => return ProductionStatus {
+                overall_health: SystemHealth::Critical,
+                sla_metrics: SlaMetrics::default(),
+                active_alerts: 0,
+                critical_alerts: 0,
+                services_healthy: 0,
+                services_total: 0,
+            },
+        };
 
         let critical_alerts = alerts
             .iter()
@@ -532,7 +562,11 @@ impl ProductionMonitor {
 
     /// Stop monitoring
     pub fn stop_monitoring(&self) {
-        *self.is_running.lock().unwrap() = false;
+        if let Ok(mut is_running) = self.is_running.lock() {
+            *is_running = false;
+        } else {
+            log::error!("Failed to acquire is_running lock - monitoring may not stop properly");
+        }
         log::info!("🛑 Production monitoring stopped");
     }
 }

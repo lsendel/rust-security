@@ -629,7 +629,13 @@ pub async fn initialize_global_jwt_manager(
     let manager = UnifiedJwtManager::new(config, redis_pool).await?;
     #[cfg(not(feature = "redis-sessions"))]
     let manager = UnifiedJwtManager::new(config).await?;
-    let mut global = GLOBAL_JWT_MANAGER.write().unwrap();
+    let mut global = match GLOBAL_JWT_MANAGER.write() {
+        Ok(lock) => lock,
+        Err(_) => {
+            error!("GLOBAL_JWT_MANAGER mutex is poisoned");
+            return Err(JwtError::KeyGenerationFailed("JWT service mutex poisoned".to_string()));
+        }
+    };
     *global = Some(Arc::new(manager));
     info!("Global JWT manager initialized");
     Ok(())
@@ -637,7 +643,7 @@ pub async fn initialize_global_jwt_manager(
 
 /// Get global JWT manager
 pub fn get_global_jwt_manager() -> Option<Arc<UnifiedJwtManager>> {
-    GLOBAL_JWT_MANAGER.read().unwrap().clone()
+    GLOBAL_JWT_MANAGER.read().ok().and_then(|guard| guard.clone())
 }
 
 /// Convenience functions using global manager

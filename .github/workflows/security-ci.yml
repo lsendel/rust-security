@@ -1,0 +1,397 @@
+name: Security CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Install cargo-audit
+      run: cargo install cargo-audit --locked
+      
+    - name: Run security audit
+      run: cargo audit
+      
+    - name: Run cargo audit with JSON output
+      run: cargo audit --format json --output audit-results.json
+      continue-on-error: true
+      
+    - name: Upload audit results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-audit-results
+        path: audit-results.json
+
+  dependency-check:
+    name: Dependency Security Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain  
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Install cargo-deny
+      run: cargo install cargo-deny --locked
+      
+    - name: Run cargo-deny
+      run: cargo deny check
+      
+    - name: Check for outdated dependencies
+      run: |
+        cargo install cargo-outdated --locked
+        cargo outdated --exit-code 1
+
+  code-security-analysis:
+    name: Static Code Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+        
+    - name: Run security-focused Clippy lints
+      run: |
+        cargo clippy --all-targets --all-features -- \
+          -D clippy::unwrap_used \
+          -D clippy::expect_used \
+          -D clippy::panic \
+          -D clippy::unreachable \
+          -D clippy::todo \
+          -D clippy::unimplemented \
+          -W clippy::shadow_unrelated \
+          -W clippy::shadow_reuse \
+          -W clippy::shadow_same \
+          -W clippy::integer_arithmetic \
+          -W clippy::float_arithmetic \
+          -W clippy::as_conversions \
+          -W clippy::cast_precision_loss \
+          -W clippy::cast_possible_truncation \
+          -W clippy::cast_possible_wrap \
+          -W clippy::cast_sign_loss
+          
+    - name: Check for unsafe code
+      run: |
+        # Count unsafe blocks
+        unsafe_count=$(find . -name "*.rs" -exec grep -l "unsafe" {} \; | wc -l)
+        echo "Found $unsafe_count files with unsafe code"
+        
+        # Fail if too many unsafe blocks (threshold: 5 files)
+        if [ $unsafe_count -gt 5 ]; then
+          echo "Too many files with unsafe code detected"
+          exit 1
+        fi
+
+  secrets-scanning:
+    name: Secrets Detection
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Run TruffleHog
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+        
+    - name: Scan for hardcoded secrets
+      run: |
+        # Check for common secret patterns
+        echo "Scanning for hardcoded secrets..."
+        
+        # Check for API keys
+        if grep -r "api[_-]key.*=" --include="*.rs" --include="*.toml" --include="*.yml" .; then
+          echo "Potential API keys found"
+          exit 1
+        fi
+        
+        # Check for AWS credentials
+        if grep -r "AKIA[0-9A-Z]{16}" --include="*.rs" --include="*.toml" --include="*.yml" .; then
+          echo "Potential AWS credentials found"
+          exit 1
+        fi
+        
+        # Check for private keys
+        if grep -r "BEGIN.*PRIVATE KEY" --include="*.rs" --include="*.toml" --include="*.yml" .; then
+          echo "Potential private keys found"
+          exit 1
+        fi
+        
+        # Check for development secrets
+        if grep -r "INSECURE_DEV_SECRET\|changeme\|development.*secret" --include="*.rs" --exclude-dir="tests" .; then
+          echo "Development secrets found in production code"
+          exit 1
+        fi
+
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: auth_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Set up test environment
+      run: |
+        echo "Setting up secure test environment..."
+        export DATABASE_URL="postgresql://postgres:test_password@localhost/auth_test"
+        export REDIS_URL="redis://localhost:6379"
+        export JWT_SECRET="test-jwt-secret-32-characters-minimum-length-required"
+        export MASTER_ENCRYPTION_KEY="test-encryption-key-32-chars-min"
+        export REQUEST_SIGNING_SECRET="test-request-signing-secret-32-chars"
+        export SESSION_SECRET="test-session-secret-32-characters-minimum"
+        
+    - name: Run security-focused tests
+      run: |
+        # Run all tests with security features enabled
+        cargo test --all-features --verbose
+        
+    - name: Run integration security tests
+      run: |
+        # Run specific security integration tests
+        cargo test --test "*security*" --verbose
+        cargo test --test "*auth*" --verbose
+        
+    - name: Generate test coverage report
+      run: |
+        cargo install cargo-tarpaulin --locked
+        cargo tarpaulin --verbose --all-features --workspace --timeout 120 \
+          --exclude-files="tests/*" \
+          --out Xml --output-dir coverage/
+          
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage/cobertura.xml
+        fail_ci_if_error: true
+
+  fuzz-testing:
+    name: Fuzzing Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust nightly
+      uses: dtolnay/rust-toolchain@nightly
+      
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz --locked
+      
+    - name: Run fuzzing tests (short duration for CI)
+      run: |
+        cd mvp-tools/input-validation
+        
+        # Run each fuzz target for 60 seconds
+        timeout 60s cargo fuzz run input_validation -- -max_total_time=60 || true
+        timeout 60s cargo fuzz run jwt_tokens -- -max_total_time=60 || true
+        timeout 60s cargo fuzz run oauth_params -- -max_total_time=60 || true
+        
+        echo "Fuzzing completed (limited duration for CI)"
+
+  docker-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build Docker image
+      run: docker build -t rust-security-app .
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'rust-security-app'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  security-benchmarks:
+    name: Security Performance Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Run security-related benchmarks
+      run: |
+        # Run benchmarks for cryptographic operations
+        cargo bench --bench crypto_benchmarks
+        
+        # Run benchmarks for authentication flows
+        cargo bench --bench auth_benchmarks
+        
+        # Check that security operations meet performance requirements
+        echo "Benchmarks completed - results stored in target/criterion/"
+
+  compliance-check:
+    name: Compliance Validation
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check security configuration
+      run: |
+        echo "Validating security configuration compliance..."
+        
+        # Check that production configs don't contain development values
+        if grep -r "development\|test\|demo" config/ --include="*.toml" | grep -v "#"; then
+          echo "Development values found in production config"
+          exit 1
+        fi
+        
+        # Validate TLS configuration
+        if ! grep -q "min_tls_version.*1.3" config/; then
+          echo "TLS 1.3 not enforced in configuration"
+          exit 1
+        fi
+        
+        # Check for required security headers
+        required_headers=("X-Frame-Options" "X-Content-Type-Options" "Strict-Transport-Security")
+        for header in "${required_headers[@]}"; do
+          if ! grep -q "$header" config/ || true; then
+            echo "Warning: $header not found in configuration"
+          fi
+        done
+        
+    - name: Validate environment variable usage
+      run: |
+        echo "Checking environment variable security..."
+        
+        # Ensure no hardcoded secrets in code
+        if grep -r "secret.*=.*\"" --include="*.rs" src/ | grep -v "test\|example\|TODO"; then
+          echo "Hardcoded secrets found in source code"
+          exit 1
+        fi
+
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [security-audit, dependency-check, code-security-analysis, secrets-scanning, security-tests]
+    if: always()
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: security-audit-results
+        
+    - name: Generate security report
+      run: |
+        echo "# Security CI Report" > security-report.md
+        echo "Generated: $(date)" >> security-report.md
+        echo "" >> security-report.md
+        
+        echo "## Job Status" >> security-report.md
+        echo "- Security Audit: ${{ needs.security-audit.result }}" >> security-report.md
+        echo "- Dependency Check: ${{ needs.dependency-check.result }}" >> security-report.md
+        echo "- Code Analysis: ${{ needs.code-security-analysis.result }}" >> security-report.md
+        echo "- Secrets Scanning: ${{ needs.secrets-scanning.result }}" >> security-report.md
+        echo "- Security Tests: ${{ needs.security-tests.result }}" >> security-report.md
+        
+        echo "" >> security-report.md
+        echo "## Summary" >> security-report.md
+        if [[ "${{ needs.security-audit.result }}" == "success" && \
+              "${{ needs.dependency-check.result }}" == "success" && \
+              "${{ needs.code-security-analysis.result }}" == "success" && \
+              "${{ needs.secrets-scanning.result }}" == "success" && \
+              "${{ needs.security-tests.result }}" == "success" ]]; then
+          echo "✅ All security checks passed" >> security-report.md
+        else
+          echo "❌ Some security checks failed - review required" >> security-report.md
+        fi
+        
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-report
+        path: security-report.md
+        
+    - name: Comment PR with security status
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('security-report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '## Security CI Results\n\n' + report
+          });

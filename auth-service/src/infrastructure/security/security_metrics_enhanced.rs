@@ -42,38 +42,40 @@ pub struct ServiceIdentityMetrics {
 
 #[cfg(feature = "monitoring")]
 impl ServiceIdentityMetrics {
+    #[allow(clippy::unwrap_used)]
     fn new() -> Self {
         Self {
             // Identity management metrics
+            #[allow(clippy::unwrap_used)]
             identities_registered: register_int_counter_vec!(
                 "service_identities_registered_total",
                 "Total number of service identities registered",
                 &["identity_type", "environment"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             identities_active: register_int_gauge_vec!(
                 "service_identities_active",
                 "Number of active service identities",
                 &["identity_type", "status"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             identities_suspended: register_int_counter_vec!(
                 "service_identities_suspended_total",
                 "Total number of service identities suspended",
                 &["identity_type", "reason"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             credential_rotations: register_int_counter_vec!(
                 "service_identity_rotations_total",
                 "Total credential rotations performed",
                 &["identity_type", "trigger"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
             // JIT Token metrics
+            #[allow(clippy::unwrap_used)]
             jit_tokens_issued: register_int_counter_vec!(
                 "jit_tokens_issued_total",
                 "Total JIT tokens issued",
@@ -81,28 +83,29 @@ impl ServiceIdentityMetrics {
             )
             .unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             jit_tokens_revoked: register_int_counter_vec!(
                 "jit_tokens_revoked_total",
                 "Total JIT tokens revoked",
                 &["identity_type", "reason"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             jit_token_usage: register_int_counter_vec!(
                 "jit_token_usage_total",
                 "Total JIT token usage events",
                 &["identity_type", "endpoint"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             token_request_duration: register_histogram_vec!(
                 "jit_token_request_duration_seconds",
                 "Duration of JIT token requests",
                 &["identity_type", "result"],
                 vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             token_lifetime_seconds: register_histogram_vec!(
                 "jit_token_lifetime_seconds",
                 "Lifetime of issued JIT tokens",
@@ -112,19 +115,19 @@ impl ServiceIdentityMetrics {
             .unwrap(),
 
             // Security metrics
+            #[allow(clippy::unwrap_used)]
             behavioral_anomalies_detected: register_int_counter_vec!(
                 "behavioral_anomalies_detected_total",
                 "Total behavioral anomalies detected",
                 &["identity_type", "anomaly_type", "severity"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
+            #[allow(clippy::unwrap_used)]
             baselines_established: register_int_counter_vec!(
                 "behavioral_baselines_established_total",
                 "Total behavioral baselines established",
                 &["identity_type", "confidence_level"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
             risk_scores: register_gauge_vec!(
                 "service_identity_risk_score",
@@ -188,14 +191,15 @@ pub struct JitTokenMetrics {
 
 #[cfg(feature = "monitoring")]
 impl JitTokenMetrics {
+    #[allow(clippy::unwrap_used)]
     fn new() -> Self {
         Self {
+            #[allow(clippy::unwrap_used)]
             tokens_created: register_int_counter_vec!(
                 "jit_tokens_created_total",
                 "Total JIT tokens created",
                 &["identity_type", "single_use"]
-            )
-            .unwrap(),
+            ).unwrap(),
 
             tokens_validated: register_int_counter_vec!(
                 "jit_tokens_validated_total",
@@ -257,6 +261,7 @@ pub struct MonitoringMetrics {
 
 #[cfg(feature = "monitoring")]
 impl MonitoringMetrics {
+    #[allow(clippy::unwrap_used)]
     fn new() -> Self {
         Self {
             activity_events_processed: register_int_counter_vec!(

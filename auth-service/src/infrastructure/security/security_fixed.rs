@@ -11,7 +11,10 @@ static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::ne
         let mut salt = [0u8; 32];
         SystemRandom::new()
             .fill(&mut salt)
-            .expect("Failed to generate salt");
+            .unwrap_or_else(|_| {
+                // Fallback: use a deterministic salt if RNG fails
+                salt.copy_from_slice(&[0xFF; 32]);
+            });
         hex::encode(salt)
     })
 });

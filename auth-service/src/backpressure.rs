@@ -1,3 +1,4 @@
+use axum::extract::Extension;
 use axum::{extract::Request, middleware::Next, response::Response};
 #[cfg(feature = "metrics")]
 use prometheus::{
@@ -273,8 +274,7 @@ impl BackpressureState {
         }
 
         // Check per-IP limit
-        {
-            let mut counters = self.per_ip_counters.lock().unwrap();
+        if let Ok(mut counters) = self.per_ip_counters.lock() {
             let ip_counter = counters
                 .entry(client_ip.to_string())
                 .or_insert_with(|| AtomicUsize::new(0));
@@ -334,11 +334,12 @@ impl BackpressureState {
         inc_requests_total();
 
         // Increment per-IP counter
-        let mut counters = self.per_ip_counters.lock().unwrap();
-        let ip_counter = counters
-            .entry(client_ip.to_string())
-            .or_insert_with(|| AtomicUsize::new(0));
-        ip_counter.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut counters) = self.per_ip_counters.lock() {
+            let ip_counter = counters
+                .entry(client_ip.to_string())
+                .or_insert_with(|| AtomicUsize::new(0));
+            ip_counter.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub fn on_request_end(&self, client_ip: &str) {
@@ -387,7 +388,7 @@ pub struct BackpressureStats {
 
 // Middleware for backpressure and limits
 pub async fn backpressure_middleware(
-    axum::extract::State(state): axum::extract::State<Arc<BackpressureState>>,
+    Extension(state): Extension<Arc<BackpressureState>>,
     request: Request,
     next: Next,
 ) -> Result<Response, crate::shared::error::AppError> {

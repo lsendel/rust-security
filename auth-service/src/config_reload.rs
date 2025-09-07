@@ -91,14 +91,19 @@ impl ConfigReloadManager {
                 // Wait for SIGHUP signal on Unix systems
                 #[cfg(unix)]
                 {
-                    if signal::unix::signal(signal::unix::SignalKind::hangup())
-                        .expect("Failed to register SIGHUP handler")
-                        .recv()
-                        .await
-                        .is_none()
-                    {
-                        error!("Error receiving SIGHUP signal: signal stream ended");
-                        continue;
+                    match signal::unix::signal(signal::unix::SignalKind::hangup()) {
+                        Ok(mut stream) => {
+                            if stream.recv().await.is_none() {
+                                error!("Error receiving SIGHUP signal: signal stream ended");
+                                continue;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to register SIGHUP handler: {}", e);
+                            // Avoid tight loop on repeated failure
+                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                            continue;
+                        }
                     }
                 }
 

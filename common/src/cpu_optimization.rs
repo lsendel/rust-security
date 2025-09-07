@@ -475,12 +475,25 @@ impl SimdProcessor {
     fn simd_add_avx2(&self, a: &[f32], b: &[f32]) -> Vec<f32> {
         use std::arch::x86_64::*;
         
+        // Safety: Validate inputs before unsafe operations
+        if a.len() != b.len() {
+            panic!("Input slices must have equal length for SIMD operations");
+        }
+        
+        if a.len() > 1024 * 1024 {
+            panic!("Input size too large for safe SIMD operations");
+        }
+        
         let mut result = vec![0.0f32; a.len()];
         let chunks = a.len() / 8; // AVX2 processes 8 f32s at once
         
         unsafe {
             for i in 0..chunks {
                 let offset = i * 8;
+                // SAFETY:
+                // - We've validated that a.len() == b.len()
+                // - offset is bounded by chunks calculation
+                // - Each access is within slice bounds (offset + 8 <= len)
                 let va = _mm256_loadu_ps(a.as_ptr().add(offset));
                 let vb = _mm256_loadu_ps(b.as_ptr().add(offset));
                 let vr = _mm256_add_ps(va, vb);

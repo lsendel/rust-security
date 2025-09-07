@@ -15,6 +15,7 @@
     clippy::trivially_copy_pass_by_ref,
     dead_code
 )]
+// Clippy unwrap/expect are denied selectively in runtime modules
 //! Common types and utilities for the rust-security workspace
 //!
 //! This crate provides shared types, error handling, and utility functions
@@ -23,6 +24,7 @@
 pub mod config;
 pub mod constants;
 pub mod crypto;
+pub mod secrets;
 pub mod crypto_utils;
 pub mod database;
 pub mod errors;

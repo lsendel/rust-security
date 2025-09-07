@@ -157,9 +157,14 @@ impl CsrfToken {
         let mut mac =
             HmacSha256::new_from_slice(secret_key).map_err(|_| CsrfError::InvalidSecretKey)?;
 
-        // Add the token data to HMAC
-        mac.update(self.token.as_bytes());
-        mac.update(self.expires_at.to_string().as_bytes());
+        // Use the same payload format as in sign method
+        let payload = format!(
+            "{}:{}:{}",
+            self.token,
+            self.expires_at,
+            self.session_id.as_deref().unwrap_or("")
+        );
+        mac.update(payload.as_bytes());
 
         // Decode the provided signature
         let signature_bytes = URL_SAFE_NO_PAD
@@ -417,7 +422,7 @@ mod tests {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
 
-        let (_token, signed_token) = csrf
+        let (_raw_token, signed_token) = csrf
             .generate_token(Some("session123".to_string()))
             .await
             .unwrap();

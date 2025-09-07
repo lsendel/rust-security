@@ -184,6 +184,14 @@ async fn test_full_authentication_flow() {
     let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
+    let register_response = register_result.unwrap();
+
+    // Verify the user's email for integration testing
+    // In production, users would need to click an email verification link
+    let user_id = UserId::from_string(register_response.id).unwrap();
+    let mut user = user_repo.find_by_id(&user_id).await.unwrap().unwrap();
+    user.verify_email(); // Mark email as verified for testing
+    user_repo.save(&user).await.unwrap();
 
     // Test user login
     let login_request = LoginRequest {

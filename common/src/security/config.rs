@@ -432,6 +432,7 @@ impl FromStr for EncryptionAlgorithm {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
     use super::*;
     use std::env;
 

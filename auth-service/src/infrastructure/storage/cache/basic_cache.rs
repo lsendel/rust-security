@@ -53,7 +53,7 @@ impl<T> CachedItem<T> {
     fn new(data: T, ttl_seconds: u64) -> Self {
         let expires_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs()
             + ttl_seconds;
 
@@ -63,7 +63,7 @@ impl<T> CachedItem<T> {
     fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
         now > self.expires_at
     }
@@ -92,7 +92,7 @@ impl Cache {
     pub async fn new(config: CacheConfig) -> Result<Self, CacheError> {
         #[cfg(feature = "redis-sessions")]
         let redis_client = if config.use_redis && config.redis_url.is_some() {
-            match Client::open(config.redis_url.as_ref().unwrap().as_str()) {
+            match Client::open(config.redis_url.as_ref().ok_or(CacheError::ConfigurationError("Redis URL not provided".to_string()))?.as_str()) {
                 Ok(client) => {
                     // Test the connection
                     match client.get_multiplexed_async_connection().await {

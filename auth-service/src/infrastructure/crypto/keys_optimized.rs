@@ -220,7 +220,7 @@ impl OptimizedSecureKeyManager {
     fn now_unix() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
     }
 }
@@ -336,9 +336,10 @@ mod tests {
         let manager = OptimizedSecureKeyManager::new();
         let status = manager.get_status().await;
 
-        match status {
-            KeyGenerationStatus::Available => {}
-            _ => panic!("Expected Available status"),
-        }
+        assert!(
+            matches!(status, KeyGenerationStatus::Available),
+            "Expected Available status, got {:?}",
+            status
+        );
     }
 }

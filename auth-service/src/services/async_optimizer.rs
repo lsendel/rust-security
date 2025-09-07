@@ -115,11 +115,16 @@ impl AsyncOptimizer {
         }
 
         // Update timing metrics
-        metrics.avg_operation_time = Duration::from_nanos(
-            (((metrics.avg_operation_time.as_nanos() * (metrics.total_operations - 1) as u128)
-                + operation_time.as_nanos())
-                / metrics.total_operations as u128).try_into().unwrap(),
-        );
+        let avg_nanos_u128 = ((metrics.avg_operation_time.as_nanos()
+            * (metrics.total_operations - 1) as u128)
+            + operation_time.as_nanos())
+            / metrics.total_operations as u128;
+        let avg_nanos_u64 = if avg_nanos_u128 > u64::MAX as u128 {
+            u64::MAX
+        } else {
+            avg_nanos_u128 as u64
+        };
+        metrics.avg_operation_time = Duration::from_nanos(avg_nanos_u64);
         metrics.max_operation_time = metrics.max_operation_time.max(operation_time);
 
         result
@@ -143,7 +148,12 @@ impl AsyncOptimizer {
                 let metrics = Arc::clone(&self.metrics);
 
                 tokio::spawn(async move {
-                    let _permit = sem.acquire().await.unwrap();
+                    let _permit = match sem.acquire().await {
+                        Ok(p) => p,
+                        Err(_) => {
+                            return (i, Err("Semaphore closed".to_string().into()), Duration::from_nanos(0));
+                        }
+                    };
 
                     let start_time = Instant::now();
                     let result = op().await;
@@ -177,7 +187,10 @@ impl AsyncOptimizer {
             }
         }
 
-        results.into_iter().map(|r| r.unwrap()).collect()
+        results
+            .into_iter()
+            .map(|r| r.unwrap_or_else(|| Err("Task failed".to_string().into())))
+            .collect()
     }
 
     /// Execute operations in batches for better performance
@@ -607,3 +620,4 @@ mod tests {
         assert!(total_time >= Duration::from_millis(90));
     }
 }
+#![deny(clippy::unwrap_used, clippy::expect_used)]

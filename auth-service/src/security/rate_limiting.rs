@@ -40,17 +40,17 @@
 //!     // Create rate limiter with default config
 //!     let config = RateLimitConfig::default();
 //!     let limiter = Arc::new(UnifiedRateLimiter::new(config, None));
-//!     
+//!
 //!     // Add to Axum router
 //!     let app = axum::Router::new()
 //!         .layer(axum::middleware::from_fn_with_state(
 //!             limiter.clone(),
 //!             unified_rate_limit_middleware
 //!         ));
-//!     
+//!
 //!     // Start cleanup task
 //!     tokio::spawn(start_rate_limit_cleanup_task(limiter));
-//!     
+//!
 //!     // Start server...
 //!     Ok(())
 //! }
@@ -90,23 +90,23 @@
 //!     per_ip_requests_per_minute: 50,
 //!     per_ip_requests_per_hour: 500,
 //!     per_ip_burst: 10,
-//!     
+//!
 //!     // OAuth endpoint limits
 //!     oauth_token_requests_per_minute: 20,
 //!     oauth_authorize_requests_per_minute: 30,
-//!     
+//!
 //!     // Security features
 //!     ban_threshold: 3,
 //!     ban_duration_minutes: 120,
 //!     enable_adaptive_limits: true,
-//!     
+//!
 //!     // Allow internal networks
 //!     enable_allowlist: true,
 //!     allowlist_ips: [
 //!         "10.0.0.1".parse().unwrap(),
 //!         "192.168.1.100".parse().unwrap()
 //!     ].iter().cloned().collect(),
-//!     
+//!
 //!     ..Default::default()
 //! };
 //! ```
@@ -138,6 +138,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use log::error;
 use base64::{engine::general_purpose, Engine as _};
 use dashmap::DashMap;
 // Redis support temporarily disabled for build compatibility
@@ -160,7 +161,7 @@ use tracing::{debug, info, warn};
 /// # Configuration Categories
 ///
 /// - **Global Limits**: System-wide rate limits
-/// - **Per-IP Limits**: Individual client rate limits  
+/// - **Per-IP Limits**: Individual client rate limits
 /// - **Per-Client Limits**: `OAuth` client rate limits
 /// - **Endpoint Limits**: Specific endpoint rate limits
 /// - **MFA Limits**: Multi-factor authentication specific limits
@@ -302,7 +303,7 @@ impl RateLimitConfig {
     /// # Supported Environment Variables
     ///
     /// - `RATE_LIMIT_GLOBAL_PER_MINUTE` - Global requests per minute
-    /// - `RATE_LIMIT_PER_IP_PER_MINUTE` - Per-IP requests per minute  
+    /// - `RATE_LIMIT_PER_IP_PER_MINUTE` - Per-IP requests per minute
     /// - `RATE_LIMIT_ENABLE_ADAPTIVE` - Enable adaptive rate limiting (true/false)
     /// - `RATE_LIMIT_ENABLE_DISTRIBUTED` - Enable distributed limiting (true/false)
     /// - `RATE_LIMIT_ALLOWLIST_IPS` - Comma-separated list of allowed IPs
@@ -517,9 +518,9 @@ pub struct RateLimitWindow {
 
 impl RateLimitWindow {
     fn new(burst_capacity: u32) -> Self {
-        let now = SystemTime::now()
+          let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         Self {
@@ -536,9 +537,9 @@ impl RateLimitWindow {
     }
 
     fn check_and_update(&self, config: &RateLimitConfig, window_duration: u64) -> RateLimitResult {
-        let now = SystemTime::now()
+          let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         // Update counters
@@ -1086,7 +1087,7 @@ impl UnifiedRateLimiter {
                     let total_requests = window.total_requests.load(Ordering::Relaxed);
 
                     // Consider entry stale if no activity in last 2 hours or very low request count
-                    if system_now.duration_since(UNIX_EPOCH).unwrap().as_secs() - last_activity
+                    if system_now.duration_since(UNIX_EPOCH).unwrap_or_else(|_| std::time::Duration::from_secs(0)).as_secs() - last_activity
                         > 7200
                         || total_requests < 5
                     {
@@ -1121,7 +1122,7 @@ impl UnifiedRateLimiter {
             let last_activity = window.window_start.load(Ordering::Relaxed);
             let total_requests = window.total_requests.load(Ordering::Relaxed);
 
-            if system_now.duration_since(UNIX_EPOCH).unwrap().as_secs() - last_activity > 3600
+            if system_now.duration_since(UNIX_EPOCH).unwrap_or_else(|_| std::time::Duration::from_secs(0)).as_secs() - last_activity > 3600
                 || total_requests == 0
             {
                 client_keys_to_remove.push(entry.key().clone());
@@ -1139,7 +1140,7 @@ impl UnifiedRateLimiter {
             let last_activity = window.window_start.load(Ordering::Relaxed);
             let total_requests = window.total_requests.load(Ordering::Relaxed);
 
-            if system_now.duration_since(UNIX_EPOCH).unwrap().as_secs() - last_activity > 3600
+            if system_now.duration_since(UNIX_EPOCH).unwrap_or_else(|_| std::time::Duration::from_secs(0)).as_secs() - last_activity > 3600
                 || total_requests == 0
             {
                 endpoint_keys_to_remove.push(entry.key().clone());
@@ -1329,7 +1330,10 @@ pub async fn unified_rate_limit_middleware(
             let mut resp = (StatusCode::TOO_MANY_REQUESTS, response).into_response();
             resp.headers_mut().insert(
                 "Retry-After",
-                retry_after.as_secs().to_string().parse().unwrap(),
+                retry_after.as_secs().to_string().parse().unwrap_or_else(|_| {
+                    error!("Failed to parse retry_after duration as header value");
+                    axum::http::HeaderValue::from_static("60")
+                }),
             );
             if let Ok(limit_str) = limiter
                 .config
@@ -1361,7 +1365,10 @@ pub async fn unified_rate_limit_middleware(
 
             let mut resp = (StatusCode::FORBIDDEN, response).into_response();
             resp.headers_mut()
-                .insert("Retry-After", retry_after.to_string().parse().unwrap());
+                .insert("Retry-After", retry_after.to_string().parse().unwrap_or_else(|_| {
+                    error!("Failed to parse retry_after duration as header value");
+                    axum::http::HeaderValue::from_static("60")
+                }));
 
             Err(resp)
         }

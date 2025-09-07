@@ -554,16 +554,40 @@ impl PasswordOperations {
 
         // Ensure at least one character from each required set
         if policy.require_uppercase {
-            password.push(uppercase.chars().choose(&mut rng).unwrap());
+            if let Some(c) = uppercase.chars().choose(&mut rng) {
+                password.push(c);
+            } else {
+                return Err(CryptoError::InvalidConfiguration(
+                    "uppercase charset empty".to_string(),
+                ));
+            }
         }
         if policy.require_lowercase {
-            password.push(lowercase.chars().choose(&mut rng).unwrap());
+            if let Some(c) = lowercase.chars().choose(&mut rng) {
+                password.push(c);
+            } else {
+                return Err(CryptoError::InvalidConfiguration(
+                    "lowercase charset empty".to_string(),
+                ));
+            }
         }
         if policy.require_numbers {
-            password.push(numbers.chars().choose(&mut rng).unwrap());
+            if let Some(c) = numbers.chars().choose(&mut rng) {
+                password.push(c);
+            } else {
+                return Err(CryptoError::InvalidConfiguration(
+                    "numbers charset empty".to_string(),
+                ));
+            }
         }
         if policy.require_special_chars {
-            password.push(symbols.chars().choose(&mut rng).unwrap());
+            if let Some(c) = symbols.chars().choose(&mut rng) {
+                password.push(c);
+            } else {
+                return Err(CryptoError::InvalidConfiguration(
+                    "symbols charset empty".to_string(),
+                ));
+            }
         }
 
         // Fill remaining positions with random characters from all sets
@@ -571,7 +595,13 @@ impl PasswordOperations {
         let all_chars: Vec<char> = all_chars.chars().collect();
 
         while password.len() < length {
-            password.push(*all_chars.choose(&mut rng).unwrap());
+            if let Some(c) = all_chars.choose(&mut rng) {
+                password.push(*c);
+            } else {
+                return Err(CryptoError::InvalidConfiguration(
+                    "all_chars empty".to_string(),
+                ));
+            }
         }
 
         // Shuffle the password to avoid predictable patterns

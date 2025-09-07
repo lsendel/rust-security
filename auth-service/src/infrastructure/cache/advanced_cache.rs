@@ -144,9 +144,12 @@ where
 
         Self {
             config,
-            l1_cache: Arc::new(RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(config.l1_max_size).unwrap(),
-            ))),
+            l1_cache: Arc::new(RwLock::new(lru::LruCache::new({
+                // Ensure capacity is non-zero to avoid panic
+                let cap = if config.l1_max_size == 0 { 1 } else { config.l1_max_size };
+                // Safe unwrap: cap is guaranteed non-zero
+                std::num::NonZeroUsize::new(cap).expect("non-zero L1 cache capacity")
+            }))),
             l2_cache,
             l3_cache,
             stats: Arc::new(RwLock::new(AdvancedCacheStats::default())),

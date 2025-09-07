@@ -410,15 +410,21 @@ impl CircuitBreaker {
 
         if failures >= self.failure_threshold {
             self.set_state(CircuitState::Open);
-            *self.last_failure_time.lock().unwrap() = Some(std::time::Instant::now());
+            if let Ok(mut guard) = self.last_failure_time.lock() {
+                *guard = Some(std::time::Instant::now());
+            }
         }
     }
 
     fn should_attempt_reset(&self) -> bool {
-        if let Some(last_failure) = *self.last_failure_time.lock().unwrap() {
-            std::time::Instant::now().duration_since(last_failure) > self.recovery_timeout
-        } else {
-            false
+        match self.last_failure_time.lock() {
+            Ok(guard) => match *guard {
+                Some(last_failure) => {
+                    std::time::Instant::now().duration_since(last_failure) > self.recovery_timeout
+                }
+                None => false,
+            },
+            Err(_) => false,
         }
     }
 }

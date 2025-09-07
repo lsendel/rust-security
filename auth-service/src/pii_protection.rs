@@ -1,6 +1,7 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::warn;
 
 /// Classification levels for sensitive data
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -116,6 +117,7 @@ pub enum RedactionStrategy {
 }
 
 /// Pattern definitions for sensitive data detection
+#[allow(clippy::expect_used)] // Static regex patterns that should always compile
 static SENSITIVE_PATTERNS: std::sync::LazyLock<HashMap<SensitiveDataType, Regex>> =
     std::sync::LazyLock::new(|| {
         let mut patterns = HashMap::new();
@@ -348,10 +350,7 @@ impl PiiSpiRedactor {
     fn partial_redact(text: &str, pattern: &Regex, data_type: &SensitiveDataType) -> String {
         pattern
             .replace_all(text, |caps: &regex::Captures| {
-                let matched = caps
-                    .get(0)
-                    .expect("Capture group 0 should always exist in a match")
-                    .as_str();
+                let matched = caps.get(0).map(|m| m.as_str()).unwrap_or("[UNKNOWN]");
                 match data_type {
                     SensitiveDataType::EmailAddress => matched.find('@').map_or_else(
                         || "[EMAIL_REDACTED]".to_string(),
@@ -427,7 +426,13 @@ impl PiiSpiRedactor {
         let mut counts = HashMap::new();
 
         for (data_type, pattern) in SENSITIVE_PATTERNS.iter() {
-            let count = u32::try_from(pattern.find_iter(text).count()).unwrap_or(u32::MAX);
+            let count = u32::try_from(pattern.find_iter(text).count()).unwrap_or_else(|_| {
+                tracing::warn!(
+                    "Too many matches for pattern {:?}, capping at u32::MAX",
+                    data_type
+                );
+                u32::MAX
+            });
             if count > 0 {
                 counts.insert(data_type.clone(), count);
             }

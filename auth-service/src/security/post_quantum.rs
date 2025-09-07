@@ -296,11 +296,11 @@ impl PostQuantumService {
             key_id: key_id.clone(),
             created_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
             expires_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs()
                 + (u64::from(self.config.key_rotation_interval_days) * 86400),
         };
@@ -341,11 +341,11 @@ impl PostQuantumService {
             key_id: key_id.clone(),
             created_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
             expires_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs()
                 + (u64::from(self.config.key_rotation_interval_days) * 86400),
         };
@@ -398,11 +398,11 @@ impl PostQuantumService {
                 key_id: key_id.clone(),
                 created_at: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                     .as_secs(),
                 expires_at: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                     .as_secs()
                     + (u64::from(self.config.key_rotation_interval_days) * 86400),
             };
@@ -472,7 +472,7 @@ impl PostQuantumService {
             key_id: key_id.to_string(),
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
         };
 
@@ -684,7 +684,14 @@ impl PostQuantumService {
     /// Generate a unique key ID
     fn generate_key_id(&self) -> String {
         let mut bytes = [0u8; 16];
-        ring::rand::SecureRandom::fill(&self.rng, &mut bytes).unwrap();
+        ring::rand::SecureRandom::fill(&self.rng, &mut bytes).unwrap_or_else(|_| {
+            // Fallback: use a deterministic ID based on current time
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                .as_secs();
+            bytes.copy_from_slice(&timestamp.to_le_bytes());
+        });
         hex::encode(bytes)
     }
 

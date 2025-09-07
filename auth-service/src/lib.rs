@@ -1,28 +1,28 @@
 //! # Rust Security Platform - Authentication Service
-//! 
+//!
 //! Enterprise-grade authentication and authorization service built with Rust.
 //! Provides OAuth 2.0, SAML, OIDC, and multi-factor authentication capabilities
 //! with sub-50ms latency and >1000 RPS throughput.
-//! 
+//!
 //! ## Performance Characteristics
-//! 
+//!
 //! - **Latency**: <50ms P95 authentication latency
 //! - **Throughput**: >1000 RPS sustained load
 //! - **Memory**: <512MB per service instance
 //! - **Startup**: <5s cold start to ready
-//! 
+//!
 //! ## Security Features
-//! 
+//!
 //! - **Memory Safety**: Rust prevents buffer overflows and use-after-free
 //! - **Threat Detection**: Real-time ML-based threat analysis
 //! - **Zero Trust**: Complete request validation and authorization
 //! - **Audit Logging**: Comprehensive security event tracking
-//! 
+//!
 //! ## Quick Start
-//! 
+//!
 //! ```rust
 //! use auth_service::{AuthService, Config};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = Config::from_env()?;
@@ -176,6 +176,7 @@
     clippy::multiple_crate_versions,
     dead_code
 )]
+// Clippy unwrap/expect are denied in runtime-focused modules individually
 
 //!
 //! ## Architecture
@@ -343,8 +344,15 @@ pub mod metrics;
 pub mod security_metrics;
 
 // Service-specific modules
+pub mod adaptive_rate_limiting;
+pub mod automated_compliance_assessment;
+pub mod immutable_audit_logging;
 pub mod jit_token_manager;
+pub mod jwt_blacklist;
 pub mod non_human_monitoring;
+pub mod pkce;
+pub mod request_fingerprinting;
+pub mod security_test_suite;
 pub mod service_identity;
 pub mod service_identity_api;
 
@@ -465,8 +473,9 @@ pub async fn mint_local_tokens_for_subject(
     let token_params = TokenCreationParams::new(subject, scope);
     let signing_key = get_signing_key(state).await?;
 
-    let access_token = create_jwt_token(&signing_key, &token_params.access_claims())?;
-    let refresh_token = create_jwt_token(&signing_key, &token_params.refresh_claims())?;
+    let access_token = create_jwt_token(state, &signing_key, &token_params.access_claims()).await?;
+    let refresh_token =
+        create_jwt_token(state, &signing_key, &token_params.refresh_claims()).await?;
 
     Ok(build_token_response(
         &access_token,
@@ -509,7 +518,7 @@ impl TokenCreationParams {
             iat: self.now.timestamp(),
             nbf: Some(self.now.timestamp()),
             jti: Some(Uuid::new_v4().to_string()),
-            token_type: Some("Bearer".to_string()),
+            token_type: Some("access_token".to_string()),
             scope: self.scope.clone(),
             nonce: None,
             client_id: None,
@@ -527,7 +536,7 @@ impl TokenCreationParams {
             iat: self.now.timestamp(),
             nbf: Some(self.now.timestamp()),
             jti: Some(Uuid::new_v4().to_string()),
-            token_type: Some("Refresh".to_string()),
+            token_type: Some("refresh_token".to_string()),
             scope: self.scope.clone(),
             nonce: None,
             client_id: None,
@@ -568,13 +577,28 @@ async fn get_signing_key(
 }
 
 /// Create a JWT token from claims
-fn create_jwt_token(
+async fn create_jwt_token(
+    state: &AppState,
     signing_key: &jsonwebtoken::EncodingKey,
     claims: &crate::jwt_secure::SecureJwtClaims,
 ) -> Result<String, crate::shared::error::AppError> {
-    let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
-    jsonwebtoken::encode(&header, claims, signing_key)
-        .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to encode JWT: {e}")))
+    #[cfg(feature = "crypto")]
+    {
+        let header = state.jwks_manager.create_jwt_header().await.map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to create JWT header: {e}"))
+        })?;
+        jsonwebtoken::encode(&header, claims, signing_key).map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to encode JWT: {e}"))
+        })
+    }
+
+    #[cfg(not(feature = "crypto"))]
+    {
+        let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256);
+        return jsonwebtoken::encode(&header, claims, signing_key).map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to encode JWT: {e}"))
+        });
+    }
 }
 
 /// Build the final token response

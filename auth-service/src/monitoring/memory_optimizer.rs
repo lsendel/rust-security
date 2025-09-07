@@ -67,11 +67,9 @@ impl<T> ObjectPool<T> {
     }
 
     pub fn acquire(&self) -> T {
-        let mut pool = self.pool.lock().unwrap();
-        if let Some(object) = pool.pop() {
-            object
-        } else {
-            (self.factory)()
+        match self.pool.lock() {
+            Ok(mut pool) => pool.pop().unwrap_or_else(|| (self.factory)()),
+            Err(_) => (self.factory)(),
         }
     }
 
@@ -82,15 +80,16 @@ impl<T> ObjectPool<T> {
         // Reset object to default state
         let object = T::default();
 
-        let mut pool = self.pool.lock().unwrap();
-        if pool.len() < self.max_size {
-            pool.push(object);
+        if let Ok(mut pool) = self.pool.lock() {
+            if pool.len() < self.max_size {
+                pool.push(object);
+            }
         }
         // Otherwise drop the object to free memory
     }
 
     pub fn pool_size(&self) -> usize {
-        self.pool.lock().unwrap().len()
+        self.pool.lock().map(|p| p.len()).unwrap_or(0)
     }
 }
 
@@ -162,24 +161,36 @@ where
     }
 
     pub fn get(&self, key: &K) -> Option<V> {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = match self.cache.write() {
+            Ok(c) => c,
+            Err(_) => return None,
+        };
         if let Some(entry) = cache.get_mut(key) {
             if entry.is_expired() {
                 cache.remove(key);
-                self.stats.lock().unwrap().cache_misses += 1;
+                if let Ok(mut s) = self.stats.lock() {
+                    s.cache_misses += 1;
+                }
                 None
             } else {
-                self.stats.lock().unwrap().cache_hits += 1;
+                if let Ok(mut s) = self.stats.lock() {
+                    s.cache_hits += 1;
+                }
                 Some(entry.access().clone())
             }
         } else {
-            self.stats.lock().unwrap().cache_misses += 1;
+            if let Ok(mut s) = self.stats.lock() {
+                s.cache_misses += 1;
+            }
             None
         }
     }
 
     pub fn insert(&self, key: K, value: V, ttl: Option<Duration>) {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = match self.cache.write() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
 
         // Check if cache is full and needs cleanup
         if cache.len() >= self.config.cache_max_size {
@@ -190,15 +201,17 @@ where
     }
 
     pub fn remove(&self, key: &K) -> Option<V> {
-        self.cache
-            .write()
-            .unwrap()
-            .remove(key)
-            .map(|entry| entry.value)
+        match self.cache.write() {
+            Ok(mut w) => w.remove(key).map(|entry| entry.value),
+            Err(_) => None,
+        }
     }
 
     pub fn cleanup_expired(&self) -> usize {
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = match self.cache.write() {
+            Ok(c) => c,
+            Err(_) => return 0,
+        };
         self.cleanup_cache(&mut cache)
     }
 
@@ -229,17 +242,31 @@ where
         }
 
         let freed_count = initial_size - cache.len();
-        self.stats.lock().unwrap().objects_freed += freed_count as u64;
+        if let Ok(mut s) = self.stats.lock() {
+            s.objects_freed += freed_count as u64;
+        }
 
         freed_count
     }
 
     pub fn get_stats(&self) -> OptimizationStats {
-        self.stats.lock().unwrap().clone()
+        self.stats
+            .lock()
+            .map(|s| s.clone())
+            .unwrap_or_else(|_| OptimizationStats {
+                cleanup_cycles: 0,
+                objects_freed: 0,
+                cache_hits: 0,
+                cache_misses: 0,
+                pool_allocations: 0,
+                gc_triggers: 0,
+                memory_saved_bytes: 0,
+                last_optimization: chrono::Utc::now(),
+            })
     }
 
     pub fn cache_size(&self) -> usize {
-        self.cache.read().unwrap().len()
+        self.cache.read().map(|c| c.len()).unwrap_or(0)
     }
 }
 
@@ -279,7 +306,7 @@ impl MemoryOptimizer {
     /// Start automatic memory optimization
     pub async fn start_optimization(&self) -> Result<(), Box<dyn std::error::Error>> {
         {
-            let mut running = self.is_running.lock().unwrap();
+            let mut running = self.is_running.lock().map_err(|_| "lock poisoned")?;
             if *running {
                 return Err("Memory optimizer is already running".into());
             }
@@ -295,7 +322,14 @@ impl MemoryOptimizer {
         tokio::spawn(async move {
             let mut interval = interval(config.cleanup_interval);
 
-            while *is_running.lock().unwrap() {
+            loop {
+                let running = match is_running.lock() {
+                    Ok(r) => *r,
+                    Err(_) => false,
+                };
+                if !running {
+                    break;
+                }
                 interval.tick().await;
 
                 let start_time = Instant::now();
@@ -306,7 +340,10 @@ impl MemoryOptimizer {
 
                 // Update statistics
                 {
-                    let mut stats = stats.lock().unwrap();
+                    let mut stats = match stats.lock() {
+                        Ok(s) => s,
+                        Err(_) => continue,
+                    };
                     stats.cleanup_cycles += 1;
                     stats.objects_freed += (token_freed + session_freed) as u64;
                     stats.last_optimization = chrono::Utc::now();
@@ -345,7 +382,9 @@ impl MemoryOptimizer {
 
     /// Stop automatic memory optimization
     pub fn stop_optimization(&self) {
-        *self.is_running.lock().unwrap() = false;
+        if let Ok(mut r) = self.is_running.lock() {
+            *r = false;
+        }
         tracing::info!("🛑 Memory optimizer stopped");
     }
 
@@ -371,7 +410,9 @@ impl MemoryOptimizer {
 
     /// Acquire a string from the pool
     pub fn acquire_string(&self) -> String {
-        self.stats.lock().unwrap().pool_allocations += 1;
+        if let Ok(mut s) = self.stats.lock() {
+            s.pool_allocations += 1;
+        }
         self.string_pool.acquire()
     }
 
@@ -408,7 +449,20 @@ impl MemoryOptimizer {
 
     /// Get memory optimization statistics
     pub fn get_stats(&self) -> MemoryOptimizerStats {
-        let base_stats = self.stats.lock().unwrap().clone();
+        let base_stats =
+            self.stats
+                .lock()
+                .map(|s| s.clone())
+                .unwrap_or_else(|_| OptimizationStats {
+                    cleanup_cycles: 0,
+                    objects_freed: 0,
+                    cache_hits: 0,
+                    cache_misses: 0,
+                    pool_allocations: 0,
+                    gc_triggers: 0,
+                    memory_saved_bytes: 0,
+                    last_optimization: chrono::Utc::now(),
+                });
 
         MemoryOptimizerStats {
             base_stats,

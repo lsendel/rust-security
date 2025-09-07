@@ -8,11 +8,12 @@
 //! - **Validation**: Comprehensive validation for security-critical settings  
 //! - **Environment Integration**: Seamless environment variable loading
 //! - **Secure Defaults**: Hardened defaults based on security best practices
-//! - **Backward Compatibility**: Compatible with existing service configurations
 
 pub mod config;
-pub mod defaults;
+pub mod defaults; 
 pub mod validation;
+pub mod hardening;
+pub mod monitoring;
 
 pub use config::*;
 pub use defaults::*;

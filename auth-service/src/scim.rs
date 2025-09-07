@@ -318,7 +318,10 @@ async fn create_user_operation(
         operation.bulk_id.clone(),
         "201",
         Some(format!("/scim/v2/Users/{}", created_user.id)),
-        Some(serde_json::to_value(created_user).unwrap()),
+        match serde_json::to_value(created_user) {
+            Ok(v) => Some(v),
+            Err(_) => None,
+        },
     ))
 )
 
@@ -343,7 +346,10 @@ async fn update_user_operation(
         operation.bulk_id.clone(),
         "200",
         Some(format!("/scim/v2/Users/{}", updated_user.id)),
-        Some(serde_json::to_value(updated_user).unwrap()),
+        match serde_json::to_value(updated_user) {
+            Ok(v) => Some(v),
+            Err(_) => None,
+        },
     ))
 )
 
@@ -385,7 +391,10 @@ async fn create_group_operation(
         operation.bulk_id.clone(),
         "201",
         Some(format!("/scim/v2/Groups/{}", created_group.id)),
-        Some(serde_json::to_value(created_group).unwrap()),
+        match serde_json::to_value(created_group) {
+            Ok(v) => Some(v),
+            Err(_) => None,
+        },
     ))
 )
 
@@ -420,7 +429,10 @@ async fn patch_user_operation(
         operation.bulk_id.clone(),
         "200",
         Some(format!("/scim/v2/Users/{}", updated_user.id)),
-        Some(serde_json::to_value(updated_user).unwrap()),
+        match serde_json::to_value(updated_user) {
+            Ok(v) => Some(v),
+            Err(_) => None,
+        },
     ))
 )
 
@@ -460,7 +472,7 @@ fn create_error_response(
         bulk_id: None,
         version: None,
         location: None,
-        response: Some(serde_json::to_value(&error).unwrap()),
+        response: serde_json::to_value(&error).ok(),
         status: status.to_string(),
     )
 )

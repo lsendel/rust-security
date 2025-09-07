@@ -3,8 +3,8 @@
 //! This module contains security-focused tests that validate the fixes
 //! implemented in the code review process.
 
-use auth_service::auth_api::*;
 use auth_service::auth_api::AuthState;
+use auth_service::auth_api::*;
 use chrono::Utc;
 use common::crypto::encryption::EncryptionOperations;
 use common::crypto::jwt::JwtConfig;
@@ -14,18 +14,30 @@ use jsonwebtoken::{decode_header, Algorithm};
 use std::env;
 
 // Stub implementations for testing
-async fn create_jwt_token_secure(_user: &User, _auth_state: &AuthState) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+async fn create_jwt_token_secure(
+    _user: &User,
+    _auth_state: &AuthState,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     Ok("test.jwt.token".to_string())
 }
 
-fn validate_jwt_token(_token: &str, _auth_state: &AuthState) -> Result<jsonwebtoken::TokenData<std::collections::HashMap<String, serde_json::Value>>, Box<dyn std::error::Error + Send + Sync>> {
+fn validate_jwt_token(
+    _token: &str,
+    _auth_state: &AuthState,
+) -> Result<
+    jsonwebtoken::TokenData<std::collections::HashMap<String, serde_json::Value>>,
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     Ok(jsonwebtoken::TokenData {
         header: jsonwebtoken::Header::default(),
         claims: std::collections::HashMap::new(),
     })
 }
 
-async fn validate_and_consume_auth_code(_auth_state: &AuthState, _code: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn validate_and_consume_auth_code(
+    _auth_state: &AuthState,
+    _code: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 

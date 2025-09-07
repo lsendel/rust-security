@@ -77,6 +77,12 @@ aws-sdk-secretsmanager = { workspace = true, optional = true }
 vaultrs = { workspace = true, optional = true }
 tracing-appender = { workspace = true, optional = true }
 
+# Post-quantum cryptography dependencies
+pqcrypto-dilithium = { version = "0.5", optional = true }
+pqcrypto-kyber = { version = "0.7", optional = true }
+pqcrypto-sphincsplus = { version = "0.5", optional = true }
+pqcrypto-traits = { version = "0.3", optional = true }
+
 [dev-dependencies]
 criterion = { workspace = true }
 reqwest = { workspace = true }
@@ -111,7 +117,14 @@ api-keys = ["dep:sqlx"]
 crypto = ["ed25519-dalek"]
 rate-limiting = []
 monitoring = []
-post-quantum = []
+post-quantum = [
+    "dep:pqcrypto-dilithium", 
+    "dep:pqcrypto-kyber", 
+    "dep:pqcrypto-sphincsplus", 
+    "dep:pqcrypto-traits"
+]
+hybrid-crypto = ["crypto", "post-quantum", "dep:p256"]
+production-security = ["security-essential", "post-quantum", "hybrid-crypto"]
 simd = []
 vault = ["dep:vaultrs", "dep:tracing-appender"]
 soar = []

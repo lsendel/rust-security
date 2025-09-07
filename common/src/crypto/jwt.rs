@@ -607,6 +607,7 @@ impl std::str::FromStr for JwtAlgorithm {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
     use super::*;
     use std::collections::HashMap;
     use std::env;

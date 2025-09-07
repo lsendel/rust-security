@@ -168,6 +168,7 @@ impl Default for DatabaseOperationsBuilder {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
     use super::*;
     use crate::database::config::{DatabaseConfig, PoolConfig, PoolStrategy, PostgresConfig};
     use std::time::Duration;

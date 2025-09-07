@@ -15,11 +15,11 @@ pub struct App {
 
 impl App {
     /// Create a new application instance
-    #[must_use]
-    pub fn new(config: Arc<crate::config::Config>) -> Self {
-        let router = crate::lib::api::create_router();
+    pub async fn new(config: Arc<crate::config::Config>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let container = crate::app::AppContainer::new().await?;
+        let router = crate::app::router::create_router(container);
 
-        Self { router, config }
+        Ok(Self { router, config })
     }
 
     /// Start the application server

@@ -5,8 +5,6 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use anyhow::Context;
-use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
-use axum::{extract::Request, middleware::Next, response::Response};
 use common::security::UnifiedSecurityConfig;
 use std::sync::Arc;
 use tracing::{error, info, warn};
@@ -14,15 +12,13 @@ use tracing::{error, info, warn};
 mod config;
 
 use auth_service::auth_api::AuthState;
-use auth_service::infrastructure::security::security::{rate_limit, start_rate_limiter_cleanup};
-use auth_service::middleware::csrf::csrf_protect;
-use auth_service::middleware::{
-    initialize_threat_detection, threat_detection_middleware, threat_metrics,
-};
+use auth_service::infrastructure::security::security::start_rate_limiter_cleanup;
+use auth_service::middleware::initialize_threat_detection;
 use auth_service::security_enhancements::ThreatDetector;
 use config::Config;
 // Initialize secure JWT key management
 use auth_service::infrastructure::crypto::keys::{initialize_keys, jwks_document};
+use auth_service::middleware::threat_metrics;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -81,18 +77,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .into());
     }
 
-    // SECURITY: Initialize authentication state with secure JWT secret from environment
-    let jwt_secret = std::env::var("JWT_SECRET").map_err(|_| {
-        anyhow::anyhow!(
-            "JWT_SECRET environment variable is required. Generate with: \
-            openssl rand -hex 32"
-        )
-    })?;
+    // SECURITY: Initialize authentication state with JWT secret from configuration
+    // Fall back to JWT_SECRET environment variable for backward compatibility (deprecated)
+    let jwt_secret = if config.jwt.secret == "change-me-in-production" {
+        // Only fall back to env var if using default placeholder
+        if let Ok(env_secret) = std::env::var("JWT_SECRET") {
+            warn!("⚠️  Using deprecated JWT_SECRET environment variable. Please set Config.jwt.secret instead.");
+            env_secret
+        } else {
+            return Err(anyhow::anyhow!(
+                "JWT secret must be configured. Either:\n\
+                1. Set Config.jwt.secret in your configuration file, or\n\
+                2. Set JWT_SECRET environment variable (deprecated)\n\
+                Generate a secure secret with: openssl rand -hex 32"
+            ).into());
+        }
+    } else {
+        config.jwt.secret.clone()
+    };
 
     // Validate JWT secret strength
     if jwt_secret.len() < 32 {
         return Err(
-            anyhow::anyhow!("JWT_SECRET must be at least 32 characters long for security").into(),
+            anyhow::anyhow!("JWT secret must be at least 32 characters long for security").into(),
         );
     }
 
@@ -122,88 +129,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     });
 
-    // Create comprehensive HTTP server with authentication endpoints
-    #[cfg_attr(not(feature = "metrics"), allow(unused_mut))]
-    let mut app = axum::Router::new()
-        // Health and status endpoints
-        .route("/health", axum::routing::get(health_check))
-        .route("/api/v1/status", axum::routing::get(status))
-        // CSRF token endpoint
-        .route(
-            "/csrf/token",
-            axum::routing::get(auth_service::middleware::csrf::issue_csrf_token),
-        )
-        // Authentication endpoints
-        .route(
-            "/api/v1/auth/register",
-            axum::routing::post(auth_service::auth_api::register),
-        )
-        .route(
-            "/api/v1/auth/login",
-            axum::routing::post(auth_service::auth_api::login),
-        )
-        .route(
-            "/api/v1/auth/me",
-            axum::routing::get(auth_service::auth_api::me),
-        )
-        // JWKS endpoints
-        .route("/.well-known/jwks.json", axum::routing::get(jwks_endpoint))
-        .route("/jwks.json", axum::routing::get(jwks_endpoint))
-        // OAuth 2.0 endpoints
-        .route(
-            "/oauth/authorize",
-            axum::routing::get(auth_service::auth_api::authorize),
-        )
-        .route(
-            "/oauth/token",
-            axum::routing::post(auth_service::auth_api::token),
-        )
-        // Service Identity endpoints
-        .route(
-            "/service/identity/register",
-            axum::routing::post(service_identity_register),
-        )
-        // JIT Token endpoints
-        .route("/token/jit", axum::routing::post(jit_token_request))
-        // Security monitoring endpoints
-        .route(
-            "/security/threats/metrics",
-            axum::routing::get(threat_metrics),
-        )
-        // Add authentication state
-        .with_state(auth_state)
-        // Security middleware (order matters - apply innermost first)
-        .layer(axum::middleware::from_fn(threat_detection_middleware))
-        .layer(axum::middleware::from_fn(rate_limit))
-        .layer(axum::middleware::from_fn(csrf_protect))
-        .layer(axum::middleware::from_fn(security_headers));
-
-    // Observability: expose Prometheus metrics and add request metrics middleware when enabled
-    #[cfg(feature = "metrics")]
-    {
-        use axum::response::IntoResponse as _;
-        use axum::routing::get;
-        // Add request metrics middleware
-        app = app.layer(axum::middleware::from_fn(
-            auth_service::metrics::metrics_middleware,
-        ));
-        // Expose /metrics endpoint only when explicitly allowed
-        app = app.route(
-            "/metrics",
-            get(|| async move {
-                if std::env::var("METRICS_PUBLIC").unwrap_or_else(|_| "false".to_string()) == "true"
-                {
-                    auth_service::metrics::metrics_handler().into_response()
-                } else {
-                    axum::response::Response::builder()
-                        .status(axum::http::StatusCode::FORBIDDEN)
-                        .body(axum::body::Body::from("metrics disabled"))
-                        .unwrap()
-                }
-            }),
-        );
-        info!("   • Metrics: GET /metrics (gated)");
-    }
+    // Use centralized router with Extension state and config
+    let app: axum::Router = auth_service::app::router::create_router_with_auth_state_and_config(auth_state, Some(config.clone()));
 
     let addr = config.server.bind_addr;
     info!("🌐 Auth service listening on {}", addr);
@@ -227,163 +154,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
-    axum::serve(listener, app).await.map_err(|e| {
-        error!("❌ Server error: {}", e);
-        e.into()
-    })
+    axum::serve(listener, app.into_make_service())
+        .await
+        .map_err(|e| {
+            error!("❌ Server error: {}", e);
+            e.into()
+        })
 }
-
-/// Health check endpoint
-async fn health_check() -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "status": "healthy",
-        "service": "rust-security-auth-service",
-        "version": "2.0.0",
-        "timestamp": chrono::Utc::now().to_rfc3339(),
-        "features": {
-            "user_registration": true,
-            "oauth2_flows": true,
-            "jwt_authentication": true,
-            "multi_factor_auth": false,
-            "session_management": true
-        }
-    }))
-}
-
-/// Status endpoint
-async fn status() -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "service": "rust-security-auth-service",
-        "status": "running",
-        "version": "2.0.0",
-        "features": [
-            "user-registration",
-            "oauth2-authorization-code",
-            "jwt-authentication",
-            "session-management",
-            "security-monitoring",
-            "multi-tenant",
-            "rate-limiting"
-        ],
-        "endpoints": {
-            "authentication": [
-                "POST /api/v1/auth/register",
-                "POST /api/v1/auth/login",
-                "GET /api/v1/auth/me"
-            ],
-            "oauth2": [
-                "GET /oauth/authorize",
-                "POST /oauth/token"
-            ],
-            "system": [
-                "GET /health",
-                "GET /api/v1/status"
-            ]
-        },
-        "packages_status": {
-            "auth-core": "✅ operational",
-            "common": "✅ operational",
-            "api-contracts": "✅ operational",
-            "policy-service": "✅ operational",
-            "compliance-tools": "✅ operational"
-        },
-        "security_note": "No demo credentials - use proper registration endpoints for users and OAuth clients"
-    }))
-}
-
-/// JWKS endpoint handler
-async fn jwks_endpoint(
-    axum::extract::State(_auth_state): axum::extract::State<AuthState>,
-) -> impl axum::response::IntoResponse {
-    use axum::http::HeaderMap;
-    use axum::Json;
-
-    // Produce JWKS from active key set
-    let jwks = jwks_document().await;
-
-    let mut headers = HeaderMap::new();
-    if let Ok(content_type) = "application/json".parse() {
-        headers.insert("content-type", content_type);
-    }
-    // Cache for short period to allow rotation while avoiding thundering herd
-    if let Ok(cache_control) = "public, max-age=300".parse() {
-        headers.insert("cache-control", cache_control);
-    }
-
-    (headers, Json(jwks))
-}
-
 // CSRF middleware moved to auth_service::middleware::csrf
-
-/// Service identity registration handler
-async fn service_identity_register(
-    axum::Json(payload): axum::Json<serde_json::Value>,
-) -> impl axum::response::IntoResponse {
-    use serde_json::json;
-
-    // Generate a unique identity ID
-    let identity_id = format!("id_{}", uuid::Uuid::new_v4());
-
-    // Extract service information
-    let service_name = payload
-        .get("service_name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-
-    info!(
-        "Service identity registered: {} -> {}",
-        service_name, identity_id
-    );
-
-    axum::Json(json!({
-        "identity_id": identity_id,
-        "service_name": service_name,
-        "status": "registered",
-        "created_at": chrono::Utc::now().to_rfc3339()
-    }))
-}
-
-/// JIT token request handler
-async fn jit_token_request(
-    axum::Json(payload): axum::Json<serde_json::Value>,
-) -> impl axum::response::IntoResponse {
-    use serde_json::json;
-
-    let identity_id = payload
-        .get("identity_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-
-    // Generate a JIT access token (simplified)
-    let access_token = format!("jit_token_{}", uuid::Uuid::new_v4());
-
-    info!("JIT token generated for identity: {}", identity_id);
-
-    let default_scope = json!(["read", "write"]);
-    axum::Json(json!({
-        "access_token": access_token,
-        "token_type": "Bearer",
-        "expires_in": 3600,
-        "scope": payload.get("scope").unwrap_or(&default_scope),
-        "identity_id": identity_id,
-        "issued_at": chrono::Utc::now().to_rfc3339()
-    }))
-}
-
-/// Security headers middleware with enhanced security
-async fn security_headers(request: Request, next: Next) -> Response {
-    let mut response = next.run(request).await;
-
-    // Get comprehensive security headers
-    let headers_map = auth_service::security_enhancements::headers::get_security_headers();
-    let response_headers = response.headers_mut();
-
-    // Apply all security headers with proper error handling
-    for (key, value) in headers_map {
-        if let Ok(header_value) = value.parse() {
-            response_headers.insert(key, header_value);
-        }
-    }
-
-    response
-}

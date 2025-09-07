@@ -27,10 +27,15 @@ rust.unsafe_code = "forbid"
 # Clippy configuration - balanced approach for code quality
 # Allow most lints but suppress noisy ones for this codebase
 clippy.all = { level = "warn", priority = -1 }
-clippy.pedantic = "allow"  # Too strict for production code
-clippy.nursery = "allow"   # Experimental lints
-clippy.cargo = "allow"  # Suppress cargo-related warnings
+clippy.pedantic = { level = "allow", priority = -1 }  # Too strict for production code
+clippy.nursery = { level = "allow", priority = -1 }   # Experimental lints
+clippy.cargo = { level = "allow", priority = -1 }  # Suppress cargo-related warnings
 clippy.multiple_crate_versions = "allow"  # Suppress dependency version conflicts
+
+# Prefer surfacing risky patterns for cleanup
+clippy.unwrap_used = "warn"
+clippy.expect_used = "warn"
+clippy.panic = "warn"
 
 # Specific allow rules for acceptable patterns in this codebase
 clippy.too_many_arguments = "allow"       # Complex APIs may need many params

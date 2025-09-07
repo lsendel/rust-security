@@ -591,7 +591,7 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
             "Retry-After",
             format!("{retry_after}")
                 .parse()
-                .expect("Failed to parse retry-after header"),
+                .unwrap_or_else(|_| axum::http::HeaderValue::from_static("60")),
         );
 
         // Add rate limit headers for client information
@@ -600,13 +600,13 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
                 "X-RateLimit-Limit",
                 format!("{}", info.limit)
                     .parse()
-                    .expect("Failed to parse rate limit header"),
+                    .unwrap_or_else(|_| axum::http::HeaderValue::from_static("100")),
             );
             response.headers_mut().insert(
                 "X-RateLimit-Remaining",
                 format!("{}", info.remaining)
                     .parse()
-                    .expect("Failed to parse rate limit remaining header"),
+                    .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
             );
         }
 

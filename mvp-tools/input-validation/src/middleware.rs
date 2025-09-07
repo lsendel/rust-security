@@ -90,7 +90,7 @@ impl SecurityHeaders {
         Self {
             // Avoid unsafe-inline for scripts in strict mode; use nonces/hashes if inline is required
             content_security_policy: Some(
-                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'none'; object-src 'none'; child-src 'none'; frame-src 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content".to_string()
+"default-src 'self'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'none'; object-src 'none'; child-src 'none'; frame-src 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content".to_string()
             ),
             strict_transport_security: Some("max-age=31536000; includeSubDomains; preload".to_string()),
             x_frame_options: Some("DENY".to_string()),
@@ -106,7 +106,7 @@ impl SecurityHeaders {
     pub fn normal() -> Self {
         Self {
             content_security_policy: Some(
-                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+"default-src 'self'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='"
                     .to_string(),
             ),
             strict_transport_security: Some("max-age=31536000".to_string()),

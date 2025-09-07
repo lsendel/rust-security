@@ -162,12 +162,14 @@ pub async fn generate_invoice(
             .map_err(|_| AppError::BadRequest("Invalid period_start format".to_string()))?
             .with_timezone(&Utc)
     } else {
-        // Default to current month
+        // Default to current month start at 00:00:00
         let now = Utc::now();
-        now.with_day(1)
-            .unwrap()
-            .with_time(chrono::NaiveTime::MIN)
-            .unwrap()
+        let first_day = now
+            .date_naive()
+            .with_day(1)
+            .ok_or_else(|| AppError::BadRequest("Invalid current date".to_string()))?;
+        let start_naive = first_day.and_time(chrono::NaiveTime::MIN);
+        chrono::DateTime::<Utc>::from_naive_utc_and_offset(start_naive, Utc)
     };
 
     let period_end = if let Some(end_str) = query.period_end {
@@ -179,11 +181,13 @@ pub async fn generate_invoice(
         let next_month = if period_start.month() == 12 {
             period_start
                 .with_year(period_start.year() + 1)
-                .unwrap()
+                .ok_or_else(|| AppError::BadRequest("Invalid year adjustment".to_string()))?
                 .with_month(1)
-                .unwrap()
+                .ok_or_else(|| AppError::BadRequest("Invalid month adjustment".to_string()))?
         } else {
-            period_start.with_month(period_start.month() + 1).unwrap()
+            period_start
+                .with_month(period_start.month() + 1)
+                .ok_or_else(|| AppError::BadRequest("Invalid month adjustment".to_string()))?
         };
         next_month - chrono::Duration::seconds(1)
     };

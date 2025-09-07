@@ -43,23 +43,23 @@
 //!     // Initialize with default configuration
 //!     let config = CryptoConfig::default();
 //!     let crypto = UnifiedCryptography::new(config).await?;
-//!     
+//!
 //!     // Encrypt sensitive data
 //!     let plaintext = b"user_session_data";
 //!     let encrypted = crypto.encrypt(plaintext, None, None).await?;
 //!     let decrypted = crypto.decrypt(&encrypted).await?;
 //!     assert_eq!(plaintext, &decrypted[..]);
-//!     
+//!
 //!     // Hash passwords securely
 //!     let password = "user_password_123!";
 //!     let hash = crypto.hash_password(password).await?;
 //!     let is_valid = crypto.verify_password(password, &hash).await?;
 //!     assert!(is_valid);
-//!     
+//!
 //!     // Generate secure tokens
 //!     let token = crypto.generate_random_string(32)?;
 //!     println!("Generated token: {}", token);
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -443,7 +443,7 @@ pub struct CryptoConfig {
 /// // For high-traffic websites (balanced)
 /// let balanced = Argon2Config {
 ///     memory_cost: 65536,    // 64 MB
-///     time_cost: 3,          // 3 iterations  
+///     time_cost: 3,          // 3 iterations
 ///     parallelism: 4,        // 4 threads
 ///     output_length: 32,     // 32 bytes
 /// };
@@ -864,7 +864,7 @@ impl UnifiedCryptography {
             aad: aad.map(<[u8]>::to_vec),
             encrypted_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
         };
 
@@ -944,7 +944,7 @@ impl UnifiedCryptography {
             key_version,
             computed_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
         };
 
@@ -1192,7 +1192,7 @@ impl UnifiedCryptography {
     /// ```rust
     /// // Generate tokens for different purposes
     /// let session_token = crypto.generate_random_string(32)?;   // ~43 chars
-    /// let api_key = crypto.generate_random_string(24)?;         // ~32 chars  
+    /// let api_key = crypto.generate_random_string(24)?;         // ~32 chars
     /// let csrf_token = crypto.generate_random_string(16)?;      // ~22 chars
     ///
     /// println!("Session token: {}", session_token);
@@ -1202,7 +1202,7 @@ impl UnifiedCryptography {
     /// # Use Cases
     ///
     /// - Session tokens and IDs
-    /// - API keys and access tokens  
+    /// - API keys and access tokens
     /// - CSRF tokens
     /// - Password reset tokens
     /// - Email verification codes
@@ -1270,7 +1270,15 @@ static GLOBAL_CRYPTO: std::sync::LazyLock<std::sync::RwLock<Option<Arc<UnifiedCr
 /// - The global crypto `RwLock` is poisoned by a previous panic
 pub async fn initialize_global_crypto(config: CryptoConfig) -> Result<(), CryptoError> {
     let crypto = UnifiedCryptography::new(config).await?;
-    let mut global = GLOBAL_CRYPTO.write().unwrap();
+    let mut global = match GLOBAL_CRYPTO.write() {
+        Ok(lock) => lock,
+        Err(_) => {
+            error!("GLOBAL_CRYPTO mutex is poisoned");
+            return Err(CryptoError::KeyGenerationFailed(
+                "Cryptography service mutex poisoned".to_string(),
+            ));
+        }
+    };
     *global = Some(Arc::new(crypto));
     info!("Global cryptography service initialized");
     Ok(())
@@ -1283,7 +1291,7 @@ pub async fn initialize_global_crypto(config: CryptoConfig) -> Result<(), Crypto
 /// This function may panic if:
 /// - The global crypto `RwLock` is poisoned by a previous panic
 pub fn get_global_crypto() -> Option<Arc<UnifiedCryptography>> {
-    GLOBAL_CRYPTO.read().unwrap().clone()
+    GLOBAL_CRYPTO.read().ok().and_then(|guard| guard.clone())
 }
 
 /// Convenience functions using global service

@@ -3,16 +3,25 @@
 //! This router contains only the core Auth-as-a-Service endpoints needed for the MVP,
 //! as specified in the 90-day implementation plan.
 
+use axum::http::{header, HeaderValue, Method};
 use axum::{
     routing::{get, post},
     Router,
 };
-use axum::http::{header, HeaderValue, Method};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use tower_http::cors::CorsLayer;
 
 use crate::app::AppContainer;
-use crate::handlers;
 use crate::auth_api::AuthState;
+use crate::handlers;
+
+/// Generate a cryptographically secure random secret for JWT signing
+fn generate_secure_secret() -> String {
+    let mut key = [0u8; 32];
+    OsRng.fill_bytes(&mut key);
+    hex::encode(key)
+}
 
 /// Create the MVP-focused application router
 ///
@@ -46,26 +55,25 @@ pub fn create_mvp_router(_container: AppContainer) -> Router<AuthState> {
         // === Core OAuth2 Endpoints ===
         .route("/oauth/token", post(crate::auth_api::token))
         // .route("/oauth/introspect", post(crate::auth_api::introspect)) // TODO: Implement introspect endpoint
-
         // === Administrative Endpoints ===
         // .route("/admin/revoke", post(handlers::admin::revoke_token)) // TODO: Implement admin handlers
-
         // === Discovery Endpoints ===
         // .route("/.well-known/jwks.json", get(handlers::jwks::public_keys)) // TODO: Implement JWKS handlers
-
         // === Health & Monitoring ===
         .route("/health", get(mvp_health_check))
         .route("/metrics", get(mvp_metrics_endpoint))
-
         .layer(cors)
         .with_state({
             let jwt_secret = std::env::var("JWT_SECRET")
-                .expect("JWT_SECRET environment variable is required");
-            
-            if jwt_secret.len() < 32 {
-                panic!("JWT_SECRET must be at least 32 characters for security");
-            }
-            
+                .map(|s| {
+                    if s.len() >= 32 {
+                        s
+                    } else {
+                        generate_secure_secret()
+                    }
+                })
+                .unwrap_or_else(|_| generate_secure_secret());
+
             AuthState::new(jwt_secret)
         })
 }

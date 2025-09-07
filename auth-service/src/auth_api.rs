@@ -1,17 +1,17 @@
 //! Enhanced Authentication API
 //!
 //! Comprehensive authentication endpoints including:
-//! - User registration and login
-//! - `OAuth` 2.0 authorization flows
-//! - JWT token management
-//! - Multi-factor authentication
-//! - Session management
+//! - User registration and login (feature = "user-auth")
+//! - `OAuth` 2.0 authorization flows (feature = "oauth")
+//! - JWT token management (feature = "jwt-auth")
+//! - Multi-factor authentication (feature = "mfa")
+//! - Session management (feature = "sessions")
 
 use crate::domain::value_objects::PasswordHash;
 use crate::infrastructure::http::policy_client;
 use crate::services::password_service::{constant_time_compare, PasswordService};
 use axum::{
-    extract::{Query, State},
+    extract::{Extension, Query, State},
     http::{HeaderMap, StatusCode},
     response::Redirect,
     Json,
@@ -43,6 +43,8 @@ pub struct AuthState {
     pub users: Arc<tokio::sync::RwLock<HashMap<String, User>>>,
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
+    pub pkce_manager: Arc<crate::pkce::PkceManager>,
+    pub jwt_blacklist: Arc<crate::jwt_blacklist::JwtBlacklist>,
 }
 
 /// User model
@@ -94,7 +96,7 @@ pub struct AuthorizationCode {
     pub used: bool,
 }
 
-/// JWT Claims
+/// JWT Claims with security-focused fields
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
@@ -104,6 +106,7 @@ pub struct Claims {
     pub exp: usize,
     pub iat: usize,
     pub iss: String,
+    pub jti: String, // JWT ID for blacklisting support
 }
 
 // Request/Response Models
@@ -135,22 +138,27 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-/// `OAuth` authorization request
+/// `OAuth` authorization request with PKCE support
 #[derive(Debug, Deserialize, Validate)]
 pub struct AuthorizeRequest {
     pub client_id: String,
     pub redirect_uri: String,
     pub scope: Option<String>,
     pub state: Option<String>,
+    // PKCE parameters (RFC 7636)
+    pub code_challenge: Option<String>,
+    pub code_challenge_method: Option<String>,
 }
 
-/// `OAuth` token request
+/// `OAuth` token request with PKCE support
 #[derive(Debug, Deserialize, Validate)]
 pub struct TokenRequest {
     pub grant_type: String,
     pub code: Option<String>,
     pub client_id: String,
     pub client_secret: String,
+    // PKCE parameter (RFC 7636)
+    pub code_verifier: Option<String>,
 }
 
 /// Authentication response
@@ -212,6 +220,8 @@ impl AuthState {
             users: Arc::new(tokio::sync::RwLock::new(users)),
             oauth_clients: Arc::new(tokio::sync::RwLock::new(oauth_clients)),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            pkce_manager: Arc::new(crate::pkce::PkceManager::new()),
+            jwt_blacklist: Arc::new(crate::jwt_blacklist::JwtBlacklist::new()),
         }
     }
 }
@@ -275,6 +285,7 @@ async fn create_jwt_token_secure(
         exp: usize::try_from((Utc::now() + Duration::hours(24)).timestamp()).unwrap_or(0),
         iat: usize::try_from(Utc::now().timestamp()).unwrap_or(0),
         iss: "rust-security-platform".to_string(),
+        jti: uuid::Uuid::new_v4().to_string(), // Unique token ID for blacklisting
     };
 
     if let Ok((kid, encoding_key)) = current_signing_key().await {
@@ -290,6 +301,7 @@ async fn create_jwt_token_secure(
 
 // API Endpoints
 
+#[cfg(feature = "user-auth")]
 /// User registration endpoint
 ///
 /// # Errors
@@ -303,7 +315,7 @@ async fn create_jwt_token_secure(
 ///
 /// This function does not panic under normal operation.
 pub async fn register(
-    State(state): State<AuthState>,
+    Extension(state): Extension<AuthState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<(axum::http::HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -392,10 +404,16 @@ pub async fn register(
         "access_token={}; Path=/; HttpOnly;{} SameSite=Strict; Max-Age=86400",
         token, secure
     );
-    headers.append(
-        axum::http::header::SET_COOKIE,
-        access_cookie.parse().unwrap(),
-    );
+    let cookie_header = access_cookie.parse().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "cookie_creation_failed".to_string(),
+                error_description: "Failed to create secure cookie header".to_string(),
+            }),
+        )
+    })?;
+    headers.append(axum::http::header::SET_COOKIE, cookie_header);
 
     // Generate CSRF token cookie (non-HttpOnly)
     let csrf_token = {
@@ -444,6 +462,7 @@ pub async fn register(
     ))
 }
 
+#[cfg(feature = "user-auth")]
 /// User login endpoint
 ///
 /// # Errors
@@ -457,7 +476,7 @@ pub async fn register(
 ///
 /// This function does not panic under normal operation.
 pub async fn login(
-    State(state): State<AuthState>,
+    Extension(state): Extension<AuthState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<(axum::http::HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -529,10 +548,20 @@ pub async fn login(
             "access_token={}; Path=/; HttpOnly;{} SameSite=Strict; Max-Age=86400",
             token, secure
         );
-        headers.append(
-            axum::http::header::SET_COOKIE,
-            access_cookie.parse().unwrap(),
-        );
+        match access_cookie.parse() {
+            Ok(cookie) => {
+                headers.append(axum::http::header::SET_COOKIE, cookie);
+            }
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "server_error".to_string(),
+                        error_description: "Failed to create secure cookie".to_string(),
+                    }),
+                ));
+            }
+        }
         let csrf_token = {
             let mut bytes = [0u8; 32];
             ring::rand::SystemRandom::new()
@@ -588,6 +617,7 @@ pub async fn login(
     }
 }
 
+#[cfg(feature = "oauth")]
 /// `OAuth` authorization endpoint
 ///
 /// # Errors
@@ -602,7 +632,7 @@ pub async fn login(
 /// Panics if the redirect URL formatting fails during string writing.
 /// This should never happen under normal operation as the format string is static.
 pub async fn authorize(
-    State(state): State<AuthState>,
+    Extension(state): Extension<AuthState>,
     Query(request): Query<AuthorizeRequest>,
 ) -> Result<Redirect, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -682,15 +712,95 @@ pub async fn authorize(
             }
         }
 
-        // SECURITY: OAuth authorization requires authenticated user
-        // In production, this endpoint should redirect to login page if user not authenticated
-        Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "access_denied".to_string(),
-                error_description: "User authentication required. This endpoint must be called by an authenticated user to authorize client access.".to_string(),
-            }),
-        ))
+        // PKCE validation if challenge provided
+        if let Some(code_challenge) = &request.code_challenge {
+            let method = request.code_challenge_method.as_deref().unwrap_or("plain");
+            #[allow(unused_variables)]
+            let challenge_method = match method {
+                "S256" => crate::pkce::CodeChallengeMethod::S256,
+                "plain" => crate::pkce::CodeChallengeMethod::Plain,
+                _ => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            error: "invalid_request".to_string(),
+                            error_description: "Unsupported code_challenge_method".to_string(),
+                        }),
+                    ))
+                }
+            };
+
+            // Validate challenge format
+            if (method == "S256" && code_challenge.len() != 43)
+                || (method == "plain" && (code_challenge.len() < 43 || code_challenge.len() > 128))
+            {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse {
+                        error: "invalid_request".to_string(),
+                        error_description: "Invalid code_challenge format".to_string(),
+                    }),
+                ));
+            }
+        }
+
+        // Generate authorization code
+        let auth_code = format!("auth_{}", uuid::Uuid::new_v4());
+        let authorization_code = AuthorizationCode {
+            code: auth_code.clone(),
+            client_id: request.client_id.clone(),
+            user_id: "demo_user".to_string(), // In production, get from authenticated session
+            redirect_uri: request.redirect_uri.clone(),
+            scope: request.scope.clone().unwrap_or_else(|| "read".to_string()),
+            created_at: Utc::now(),
+            expires_at: Utc::now() + chrono::Duration::minutes(10), // 10 minute expiry
+            used: false,
+        };
+
+        // Store authorization code
+        state
+            .authorization_codes
+            .write()
+            .await
+            .insert(auth_code.clone(), authorization_code);
+
+        // Store PKCE challenge if provided
+        if let (Some(code_challenge), Some(code_challenge_method)) =
+            (&request.code_challenge, &request.code_challenge_method)
+        {
+            let method = match code_challenge_method.as_str() {
+                "S256" => crate::pkce::CodeChallengeMethod::S256,
+                "plain" => crate::pkce::CodeChallengeMethod::Plain,
+                _ => crate::pkce::CodeChallengeMethod::S256, // Default to secure method
+            };
+
+            if let Err(e) = state
+                .pkce_manager
+                .store_challenge(
+                    &auth_code,
+                    code_challenge.clone(),
+                    method,
+                    request.client_id.clone(),
+                )
+                .await
+            {
+                warn!("Failed to store PKCE challenge: {:?}", e);
+                // Continue without PKCE - not all clients require it
+            }
+        }
+
+        // Build redirect URL with authorization code
+        let mut redirect_url = format!("{}?code={}", request.redirect_uri, auth_code);
+
+        if let Some(state_param) = &request.state {
+            redirect_url = format!("{}&state={}", redirect_url, state_param);
+        }
+
+        info!(
+            "Authorization code generated for client: {}",
+            request.client_id
+        );
+        Ok(Redirect::to(&redirect_url))
     } else {
         Err((
             StatusCode::BAD_REQUEST,
@@ -702,6 +812,7 @@ pub async fn authorize(
     }
 }
 
+#[cfg(feature = "oauth")]
 /// `OAuth` token endpoint
 ///
 /// # Errors
@@ -720,7 +831,7 @@ pub async fn authorize(
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::significant_drop_tightening)]
 pub async fn token(
-    State(state): State<AuthState>,
+    Extension(state): Extension<AuthState>,
     Json(request): Json<TokenRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
     validate_token_request(&request)?;
@@ -811,7 +922,7 @@ async fn authenticate_oauth_client(
     Ok(client)
 }
 
-/// Handle authorization code grant flow
+/// Handle authorization code grant flow with PKCE support
 async fn handle_authorization_code_flow(
     state: &AuthState,
     request: &TokenRequest,
@@ -820,6 +931,22 @@ async fn handle_authorization_code_flow(
         .code
         .as_ref()
         .ok_or_else(|| oauth_error("invalid_request", "Missing authorization code"))?;
+
+    // PKCE verification if code_verifier is provided
+    if let Some(code_verifier) = &request.code_verifier {
+        if let Err(e) = state
+            .pkce_manager
+            .verify_and_consume(code, code_verifier, &request.client_id)
+            .await
+        {
+            warn!("PKCE verification failed: {:?}", e);
+            return Err(oauth_error("invalid_grant", "PKCE verification failed"));
+        }
+        info!(
+            "PKCE verification successful for client: {}",
+            request.client_id
+        );
+    }
 
     let (user_id, scope) = validate_and_consume_auth_code(state, code).await?;
     let user = find_user_by_id(state, &user_id).await?;
@@ -907,10 +1034,11 @@ fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorRespons
     )
 }
 
-/// Validate JWT token with strict algorithm enforcement
+/// Validate JWT token with strict algorithm enforcement and blacklist checking
 ///
 /// This function enforces the configured algorithm without fallback to prevent algorithm confusion attacks
-fn validate_jwt_token(
+/// and checks the token against the blacklist for revoked tokens.
+async fn validate_jwt_token(
     token: &str,
     auth_state: &AuthState,
 ) -> Result<Claims, (StatusCode, Json<ErrorResponse>)> {
@@ -963,7 +1091,29 @@ fn validate_jwt_token(
         )
     })?;
 
-    Ok(token_data.claims)
+    let claims = token_data.claims;
+
+    // Check if token is blacklisted
+    if auth_state
+        .jwt_blacklist
+        .is_token_blacklisted(&claims.jti)
+        .await
+    {
+        warn!(
+            jti = %claims.jti,
+            user_id = %claims.sub,
+            "Attempted use of blacklisted token"
+        );
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid_token".to_string(),
+                error_description: "Token has been revoked".to_string(),
+            }),
+        ));
+    }
+
+    Ok(claims)
 }
 
 /// Get current user info with secure token validation
@@ -980,7 +1130,7 @@ fn validate_jwt_token(
 ///
 /// This function does not panic under normal operation.
 pub async fn me(
-    State(state): State<AuthState>,
+    Extension(state): Extension<AuthState>,
     headers: HeaderMap,
 ) -> Result<Json<UserInfo>, (StatusCode, Json<ErrorResponse>)> {
     // Yield to keep handler truly async and cooperative
@@ -1019,7 +1169,7 @@ pub async fn me(
         })?;
 
     // Validate JWT token using secure JWKS manager or fallback
-    let claims = validate_jwt_token(token, &state)?;
+    let claims = validate_jwt_token(token, &state).await?;
 
     // Optional remote policy check: allow gating access to profile via policy-service
     if std::env::var("ENABLE_REMOTE_POLICY")
@@ -1077,6 +1227,120 @@ pub async fn me(
         name: claims.name,
         roles: claims.roles,
     }))
+}
+
+/// Logout endpoint - blacklists the current JWT token
+///
+/// # Errors
+///
+/// Returns `(StatusCode, Json<ErrorResponse>)` if:
+/// - Authorization header is missing (`UNAUTHORIZED`)
+/// - Token format is invalid (`UNAUTHORIZED`)
+/// - Token validation fails (`UNAUTHORIZED`)
+/// - Token blacklisting fails (`INTERNAL_SERVER_ERROR`)
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
+pub async fn logout(
+    Extension(state): Extension<AuthState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    // Extract token from Authorization header
+    let auth_header = headers.get("Authorization").ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "missing_token".to_string(),
+                error_description: "Authorization header missing".to_string(),
+            }),
+        )
+    })?;
+
+    let token = auth_header
+        .to_str()
+        .map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_token".to_string(),
+                    error_description: "Invalid authorization header".to_string(),
+                }),
+            )
+        })?
+        .strip_prefix("Bearer ")
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_token".to_string(),
+                    error_description: "Bearer token required".to_string(),
+                }),
+            )
+        })?;
+
+    // Check if token is already blacklisted
+    if let Ok(jti) = state.jwt_blacklist.extract_jti_from_token(token) {
+        if state.jwt_blacklist.is_token_blacklisted(&jti).await {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_token".to_string(),
+                    error_description: "Token already revoked".to_string(),
+                }),
+            ));
+        }
+    }
+
+    // Validate token to get claims (this also ensures the token is valid)
+    let claims = validate_jwt_token(token, &state).await.map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid_token".to_string(),
+                error_description: "Invalid or expired token".to_string(),
+            }),
+        )
+    })?;
+
+    // Extract JTI and user information from claims
+    let jti = &claims.jti;
+    let user_id = &claims.sub;
+    let issuer = &claims.iss;
+    let exp = Some(claims.exp as u64);
+
+    // Blacklist the token
+    if let Err(e) = state
+        .jwt_blacklist
+        .blacklist_token(
+            jti.to_string(),
+            issuer.to_string(),
+            user_id.to_string(),
+            exp,
+            crate::jwt_blacklist::BlacklistReason::Logout,
+        )
+        .await
+    {
+        warn!("Failed to blacklist token during logout: {:?}", e);
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "logout_failed".to_string(),
+                error_description: "Failed to process logout".to_string(),
+            }),
+        ));
+    }
+
+    info!(
+        user_id = %user_id,
+        jti = %jti,
+        "User logged out successfully"
+    );
+
+    Ok(Json(serde_json::json!({
+        "message": "Logout successful",
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    })))
 }
 
 #[cfg(test)]
@@ -1174,7 +1438,7 @@ mod tests {
             .expect("Test token creation should succeed");
 
         // Validate the token
-        let validation_result = validate_jwt_token(&token, &auth_state);
+        let validation_result = validate_jwt_token(&token, &auth_state).await;
         assert!(validation_result.is_ok(), "Token validation should succeed");
 
         let claims = validation_result.expect("Test token validation should succeed");

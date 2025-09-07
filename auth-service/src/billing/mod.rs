@@ -354,10 +354,11 @@ impl BillingSystem {
             metadata: HashMap::new(),
         };
 
-        self.subscriptions
-            .lock()
-            .unwrap()
-            .insert(customer_id.clone(), subscription.clone());
+        if let Ok(mut subs) = self.subscriptions.lock() {
+            subs.insert(customer_id.clone(), subscription.clone());
+        } else {
+            return Err(BillingError::InvalidPlan("mutex poisoned".to_string()));
+        }
 
         log::info!(
             "Created subscription for customer {}: {}",
@@ -375,13 +376,15 @@ impl BillingSystem {
         quantity: u64,
     ) -> Result<(), BillingError> {
         // Verify customer has active subscription
-        let subscription = self
-            .subscriptions
-            .lock()
-            .unwrap()
-            .get(&customer_id)
-            .ok_or_else(|| BillingError::CustomerNotFound(customer_id.clone()))?
-            .clone();
+        let subscription = {
+            let subs = self
+                .subscriptions
+                .lock()
+                .map_err(|_| BillingError::UsageRecordingFailed("lock poisoned".to_string()))?;
+            subs.get(&customer_id)
+                .ok_or_else(|| BillingError::CustomerNotFound(customer_id.clone()))?
+                .clone()
+        };
 
         if !matches!(
             subscription.status,
@@ -398,7 +401,13 @@ impl BillingSystem {
             metadata: HashMap::new(),
         };
 
-        self.usage_records.lock().unwrap().push(usage_record);
+        if let Ok(mut recs) = self.usage_records.lock() {
+            recs.push(usage_record);
+        } else {
+            return Err(BillingError::UsageRecordingFailed(
+                "lock poisoned".to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -408,15 +417,21 @@ impl BillingSystem {
         customer_id: &str,
         month: NaiveDate,
     ) -> Result<MonthlyUsage, BillingError> {
-        let subscription = self
-            .subscriptions
-            .lock()
-            .unwrap()
-            .get(customer_id)
-            .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?
-            .clone();
+        let subscription = {
+            let guard = self
+                .subscriptions
+                .lock()
+                .map_err(|_| BillingError::InvoiceGenerationFailed("lock poisoned".to_string()))?;
+            guard
+                .get(customer_id)
+                .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?
+                .clone()
+        };
 
-        let usage_records = self.usage_records.lock().unwrap();
+        let usage_records = self
+            .usage_records
+            .lock()
+            .map_err(|_| BillingError::UsageRecordingFailed("lock poisoned".to_string()))?;
 
         // Filter records for this customer and month
         let month_records: Vec<_> = usage_records
@@ -463,16 +478,20 @@ impl BillingSystem {
         period_start: DateTime<Utc>,
         period_end: DateTime<Utc>,
     ) -> Result<Invoice, BillingError> {
-        let subscription = self
-            .subscriptions
-            .lock()
-            .unwrap()
-            .get(customer_id)
-            .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?
-            .clone();
+        let subscription = {
+            let subs = self
+                .subscriptions
+                .lock()
+                .map_err(|_| BillingError::InvoiceGenerationFailed("lock poisoned".to_string()))?;
+            subs.get(customer_id)
+                .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?
+                .clone()
+        };
 
         // Get usage for the period
-        let month = period_start.date_naive().with_day(1).unwrap();
+        let month = period_start.date_naive().with_day(1).ok_or_else(|| {
+            BillingError::InvoiceGenerationFailed("invalid period start date".to_string())
+        })?;
         let usage = self.get_monthly_usage(customer_id, month)?;
 
         let mut line_items = Vec::new();
@@ -538,10 +557,13 @@ impl BillingSystem {
             paid_at: None,
         };
 
-        self.invoices
-            .lock()
-            .unwrap()
-            .insert(invoice.id.clone(), invoice.clone());
+        if let Ok(mut inv) = self.invoices.lock() {
+            inv.insert(invoice.id.clone(), invoice.clone());
+        } else {
+            return Err(BillingError::InvoiceGenerationFailed(
+                "lock poisoned".to_string(),
+            ));
+        }
 
         log::info!(
             "Generated invoice {} for customer {} - Amount: ${:.2}",
@@ -562,20 +584,24 @@ impl BillingSystem {
     pub fn is_customer_active(&self, customer_id: &str) -> bool {
         self.subscriptions
             .lock()
-            .unwrap()
-            .get(customer_id)
-            .map(|sub| {
-                matches!(
-                    sub.status,
-                    SubscriptionStatus::Active | SubscriptionStatus::Trialing
-                )
+            .ok()
+            .and_then(|subs| {
+                subs.get(customer_id).map(|sub| {
+                    matches!(
+                        sub.status,
+                        SubscriptionStatus::Active | SubscriptionStatus::Trialing
+                    )
+                })
             })
             .unwrap_or(false)
     }
 
     /// Get customer subscription
     pub fn get_customer_subscription(&self, customer_id: &str) -> Option<CustomerSubscription> {
-        self.subscriptions.lock().unwrap().get(customer_id).cloned()
+        self.subscriptions
+            .lock()
+            .ok()
+            .and_then(|subs| subs.get(customer_id).cloned())
     }
 
     /// Update subscription status
@@ -584,7 +610,10 @@ impl BillingSystem {
         customer_id: &str,
         status: SubscriptionStatus,
     ) -> Result<(), BillingError> {
-        let mut subscriptions = self.subscriptions.lock().unwrap();
+        let mut subscriptions = self
+            .subscriptions
+            .lock()
+            .map_err(|_| BillingError::InvalidPlan("lock poisoned".to_string()))?;
         let subscription = subscriptions
             .get_mut(customer_id)
             .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?;

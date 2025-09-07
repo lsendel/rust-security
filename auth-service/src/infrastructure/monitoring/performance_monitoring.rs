@@ -236,7 +236,7 @@ impl PerformanceMonitor {
             .filter_map(|t| t.duration.map(|d| d.as_secs_f64() * 1000.0))
             .collect();
 
-        latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        latencies.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let (p50, p95, p99, mean) = if latencies.is_empty() {
             (0.0, 0.0, 0.0, 0.0)

@@ -78,6 +78,8 @@ pub enum CacheError {
     RedisError(#[from] redis::RedisError),
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
     #[error("Cache operation timeout")]
     Timeout,
     #[error("Cache is full")]

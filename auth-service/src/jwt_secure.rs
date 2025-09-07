@@ -222,24 +222,25 @@ fn validate_token_structure(
         }
 
         // Check for dangerous patterns in scope
-        let dangerous_patterns = [
-            "javascript:",
-            "data:",
-            "vbscript:",
-            "<script",
-            "eval(",
-            "expression(",
-            "import(",
-            "require(",
-        ];
+        use once_cell::sync::Lazy;
+        static DANGEROUS_PATTERNS: Lazy<[&str; 8]> = Lazy::new(|| {
+            [
+                "javascript:",
+                "data:",
+                "vbscript:",
+                "<script",
+                "eval(",
+                "expression(",
+                "import(",
+                "require(",
+            ]
+        });
 
         let scope_lower = scope.to_lowercase();
-        for pattern in &dangerous_patterns {
-            if scope_lower.contains(pattern) {
-                return Err(crate::shared::error::AppError::InvalidToken(
-                    "Invalid characters in scope".to_string(),
-                ));
-            }
+        if DANGEROUS_PATTERNS.iter().any(|p| scope_lower.contains(p)) {
+            return Err(crate::shared::error::AppError::InvalidToken(
+                "Invalid characters in scope".to_string(),
+            ));
         }
     }
 

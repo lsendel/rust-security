@@ -730,7 +730,11 @@ impl ClientRegistrationManager {
                     }
                 }
                 "contacts" => {
-                    if request.contacts.is_none() || request.contacts.as_ref().unwrap().is_empty() {
+                    if request
+                        .contacts
+                        .as_ref()
+                        .map_or(true, |c| c.is_empty())
+                    {
                         return Err(ClientRegistrationError::PolicyViolation(
                             "contacts is required".to_string(),
                         ));
@@ -998,8 +1002,11 @@ fn validate_redirect_uris(uris: &[String]) -> Result<(), ValidationError> {
             return Err(ValidationError::new("Invalid redirect URI format"));
         }
 
-        let url = url::Url::parse(uri).unwrap();
-        if url.scheme() != "https" && url.scheme() != "http" && url.scheme() != "custom" {
+        if let Ok(url) = url::Url::parse(uri) {
+            if url.scheme() != "https" && url.scheme() != "http" && url.scheme() != "custom" {
+                return Err(ValidationError::new("Invalid redirect URI scheme"));
+            }
+        } else {
             return Err(ValidationError::new("Invalid redirect URI scheme"));
         }
     }
@@ -1112,7 +1119,7 @@ pub async fn register_client_handler(
 }
 
 pub async fn get_client_configuration_handler(
-    Path(client__id): Path<String>,
+    Path(client_id): Path<String>,
     headers: HeaderMap,
     State(manager): State<Arc<ClientRegistrationManager>>,
 ) -> Result<Json<ClientRegistrationResponse>, ClientRegistrationError> {
@@ -1129,7 +1136,7 @@ pub async fn get_client_configuration_handler(
 }
 
 pub async fn update_client_configuration_handler(
-    Path(client__id): Path<String>,
+    Path(client_id): Path<String>,
     headers: HeaderMap,
     State(manager): State<Arc<ClientRegistrationManager>>,
     Json(request): Json<ClientRegistrationRequest>,
@@ -1147,7 +1154,7 @@ pub async fn update_client_configuration_handler(
 }
 
 pub async fn delete_client_handler(
-    Path(client__id): Path<String>,
+    Path(client_id): Path<String>,
     headers: HeaderMap,
     State(manager): State<Arc<ClientRegistrationManager>>,
 ) -> Result<StatusCode, ClientRegistrationError> {

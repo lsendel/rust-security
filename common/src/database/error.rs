@@ -130,6 +130,7 @@ impl<T> DatabaseErrorExt<T> for DatabaseResult<T> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
     use super::*;
 
     #[test]

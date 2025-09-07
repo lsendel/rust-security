@@ -1,8 +1,8 @@
 use axum::http::Method;
 use serde_json::json;
+use serial_test::serial;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
-use serial_test::serial;
 
 mod harness;
 use harness::{make_auth_router, request};

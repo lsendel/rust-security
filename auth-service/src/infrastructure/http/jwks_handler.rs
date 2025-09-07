@@ -98,7 +98,9 @@ impl JwksCache {
 
     /// Store JWKS in cache with calculated `ETag`
     pub async fn set(&self, key: String, jwks: JwksResponse) -> JwksCacheEntry {
-        let jwks_json = serde_json::to_string(&jwks).unwrap_or_default();
+        let jwks_json = serde_json::to_string(&jwks).unwrap_or_else(|_| {
+            serde_json::to_string(&JwksResponse { keys: vec![] }).unwrap_or_default()
+        });
         let etag = calculate_etag(&jwks_json);
         let now = Utc::now();
 
@@ -167,8 +169,10 @@ pub async fn jwks_handler(
     // Check cache first
     if let Some(cached_entry) = cache.get(cache_key, if_none_match).await {
         // If ETag matches, return 304 Not Modified
-        if if_none_match.is_some() && if_none_match.unwrap() == cached_entry.etag {
-            return not_modified_response(&cached_entry);
+        if let Some(if_none_match_value) = if_none_match {
+            if if_none_match_value == cached_entry.etag {
+                return not_modified_response(&cached_entry);
+            }
         }
 
         // Return cached response with headers
@@ -212,13 +216,21 @@ fn jwks_response(entry: JwksCacheEntry) -> Response {
     let mut headers = HeaderMap::new();
 
     // ETag header
-    headers.insert(header::ETAG, HeaderValue::from_str(&entry.etag).unwrap());
+    if let Ok(etag_value) = HeaderValue::from_str(&entry.etag) {
+        headers.insert(header::ETAG, etag_value);
+    } else {
+        warn!("Failed to create ETag header value from: {}", entry.etag);
+    }
 
     // Last-Modified header
-    headers.insert(
-        header::LAST_MODIFIED,
-        HeaderValue::from_str(&entry.last_modified.to_rfc2822()).unwrap(),
-    );
+    if let Ok(last_modified_value) = HeaderValue::from_str(&entry.last_modified.to_rfc2822()) {
+        headers.insert(header::LAST_MODIFIED, last_modified_value);
+    } else {
+        warn!(
+            "Failed to create Last-Modified header value from: {}",
+            entry.last_modified
+        );
+    }
 
     // Cache-Control header (1 hour cache, must revalidate)
     headers.insert(
@@ -228,10 +240,11 @@ fn jwks_response(entry: JwksCacheEntry) -> Response {
 
     // Expires header (1 hour from now)
     let expires = Utc::now() + Duration::hours(1);
-    headers.insert(
-        header::EXPIRES,
-        HeaderValue::from_str(&expires.to_rfc2822()).unwrap(),
-    );
+    if let Ok(expires_value) = HeaderValue::from_str(&expires.to_rfc2822()) {
+        headers.insert(header::EXPIRES, expires_value);
+    } else {
+        warn!("Failed to create Expires header value from: {}", expires);
+    }
 
     // Security headers
     headers.insert(
@@ -258,7 +271,14 @@ fn not_modified_response(entry: &JwksCacheEntry) -> Response {
     let mut headers = HeaderMap::new();
 
     // ETag header (must be included in 304)
-    headers.insert(header::ETAG, HeaderValue::from_str(&entry.etag).unwrap());
+    if let Ok(etag_value) = HeaderValue::from_str(&entry.etag) {
+        headers.insert(header::ETAG, etag_value);
+    } else {
+        warn!(
+            "Failed to create ETag header value for 304 response from: {}",
+            entry.etag
+        );
+    }
 
     // Cache-Control header
     headers.insert(

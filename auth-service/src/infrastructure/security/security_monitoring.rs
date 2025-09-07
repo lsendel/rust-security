@@ -232,7 +232,10 @@ impl SecurityMonitor {
                                         threshold.threshold_value,
                                         threshold.time_window_seconds
                                     ),
-                                    timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+                                    timestamp: SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
                                     source_ip: None,
                                     destination_ip: None,
                                     source: "security_monitoring".to_string(),
@@ -240,10 +243,30 @@ impl SecurityMonitor {
                                     client_id: None,
                                     metadata: [
                                         ("metric_name".to_string(), serde_json::Value::String(threshold.metric_name.clone())),
-                                        ("current_value".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(current_value).unwrap())),
-                                        ("previous_value".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(previous_value).unwrap())),
-                                        ("delta".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(delta).unwrap())),
-                                        ("threshold".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(threshold.threshold_value).unwrap())),
+                                        (
+                                            "current_value".to_string(),
+                                            serde_json::Number::from_f64(current_value)
+                                                .map(serde_json::Value::Number)
+                                                .unwrap_or(serde_json::Value::Null)
+                                        ),
+                                        (
+                                            "previous_value".to_string(),
+                                            serde_json::Number::from_f64(previous_value)
+                                                .map(serde_json::Value::Number)
+                                                .unwrap_or(serde_json::Value::Null)
+                                        ),
+                                        (
+                                            "delta".to_string(),
+                                            serde_json::Number::from_f64(delta)
+                                                .map(serde_json::Value::Number)
+                                                .unwrap_or(serde_json::Value::Null)
+                                        ),
+                                        (
+                                            "threshold".to_string(),
+                                            serde_json::Number::from_f64(threshold.threshold_value)
+                                                .map(serde_json::Value::Number)
+                                                .unwrap_or(serde_json::Value::Null)
+                                        ),
                                     ].into(),
                                     resolved: false,
                                     resolution_notes: None,
@@ -416,7 +439,7 @@ impl SecurityMonitor {
     ) {
         let cutoff_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs()
             .saturating_sub(retention_days * 24 * 3600);
 
@@ -481,7 +504,7 @@ impl SecurityMonitor {
             description,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
                 .as_secs(),
             source_ip,
             destination_ip: None,
