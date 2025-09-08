@@ -330,29 +330,75 @@ impl ClientRegistrationManager {
             }
         }
 
-        // Validate request manually
-        self.validate_registration_request(&request)?;
 
-        // Policy-based validation
+        // Extracted: Validate request
+        self.validate_registration_request(&request)?;
         self.validate_against_policy(&request)?;
 
-        // Generate client credentials
+        // Extracted: Generate credentials
+        let (client_id, client_secret, _registration_access_token, client_secret_hash, registration_access_token_hash, secret_expires_at, now) =
+            self.generate_client_credentials()?;
+
+        // Extracted: Prepare client data
+        let client = self.prepare_client_data(
+            &client_id,
+            &client_secret_hash,
+            &registration_access_token_hash,
+            &secret_expires_at,
+            &request,
+            &client_ip,
+            now,
+        );
+
+        // Store in database
+        self.store_client(&client).await?;
+
+        // Record registration event
+        self.record_registration_event(&client_id, &client_ip).await?;
+
+        info!(
+            "OAuth client registered: {} from IP: {:?}",
+            client_id, client_ip
+        );
+
+        // Extracted: Build response
+        Ok(self.build_registration_response(
+            &client_id,
+            &client_secret,
+            &secret_expires_at,
+            &request,
+            now,
+        ))
+    }
+
+    // Helper to generate credentials
+    fn generate_client_credentials(&self) -> Result<(String, String, String, String, String, chrono::DateTime<Utc>, chrono::DateTime<Utc>), ClientRegistrationError> {
         let client_id = format!("client_{}", Uuid::new_v4().simple());
         let client_secret = generate_client_secret();
         let registration_access_token = generate_registration_access_token();
-
         let client_secret_hash = hash_secret(&client_secret);
         let registration_access_token_hash = hash_secret(&registration_access_token);
-
         let now = Utc::now();
-        let secret_expires_at = now + Duration::seconds(self.policy.client_secret_ttl as i64);
+        let secret_expires_at = now + chrono::Duration::seconds(self.policy.client_secret_ttl as i64);
+        Ok((client_id, client_secret, registration_access_token, client_secret_hash, registration_access_token_hash, secret_expires_at, now))
+    }
 
-        // Prepare client data
-        let client = RegisteredClient {
-            client_id: client_id.clone(),
-            client_secret_hash,
-            client_secret_expires_at: secret_expires_at,
-            registration_access_token_hash,
+    // Helper to prepare client data
+    fn prepare_client_data(
+        &self,
+        client_id: &str,
+        client_secret_hash: &str,
+        registration_access_token_hash: &str,
+        secret_expires_at: &chrono::DateTime<Utc>,
+        request: &ClientRegistrationRequest,
+        client_ip: &Option<String>,
+        now: chrono::DateTime<Utc>,
+    ) -> RegisteredClient {
+        RegisteredClient {
+            client_id: client_id.to_string(),
+            client_secret_hash: client_secret_hash.to_string(),
+            client_secret_expires_at: *secret_expires_at,
+            registration_access_token_hash: registration_access_token_hash.to_string(),
             redirect_uris: request.redirect_uris.clone(),
             response_types: request.response_types.clone(),
             grant_types: request.grant_types.clone(),
@@ -377,49 +423,46 @@ impl ClientRegistrationManager {
             updated_at: now,
             created_by_ip: client_ip.clone(),
             status: "active".to_string(),
-        };
+        }
+    }
 
-        // Store in database
-        self.store_client(&client).await?;
-
-        // Record registration event
-        self.record_registration_event(&client_id, &client_ip)
-            .await?;
-
-        info!(
-            "OAuth client registered: {} from IP: {:?}",
-            client_id, client_ip
-        );
-
-        // Build response
-        Ok(ClientRegistrationResponse {
-            client_id: client_id.clone(),
-            client_secret: Some(client_secret),
+    // Helper to build response
+    fn build_registration_response(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+        secret_expires_at: &chrono::DateTime<Utc>,
+        request: &ClientRegistrationRequest,
+        now: chrono::DateTime<Utc>,
+    ) -> ClientRegistrationResponse {
+        ClientRegistrationResponse {
+            client_id: client_id.to_string(),
+            client_secret: Some(client_secret.to_string()),
             client_secret_expires_at: secret_expires_at.timestamp() as u64,
-            redirect_uris: request.redirect_uris,
-            response_types: request.response_types,
-            grant_types: request.grant_types,
-            application_type: request.application_type,
-            contacts: request.contacts,
-            client_name: request.client_name,
-            logo_uri: request.logo_uri,
-            client_uri: request.client_uri,
-            policy_uri: request.policy_uri,
-            tos_uri: request.tos_uri,
-            jwks_uri: request.jwks_uri,
-            jwks: request.jwks,
-            default_acr_values: request.default_acr_values,
+            redirect_uris: request.redirect_uris.clone(),
+            response_types: request.response_types.clone(),
+            grant_types: request.grant_types.clone(),
+            application_type: request.application_type.clone(),
+            contacts: request.contacts.clone(),
+            client_name: request.client_name.clone(),
+            logo_uri: request.logo_uri.clone(),
+            client_uri: request.client_uri.clone(),
+            policy_uri: request.policy_uri.clone(),
+            tos_uri: request.tos_uri.clone(),
+            jwks_uri: request.jwks_uri.clone(),
+            jwks: request.jwks.clone(),
+            default_acr_values: request.default_acr_values.clone(),
             default_max_age: request.default_max_age,
             require_auth_time: request.require_auth_time,
-            token_endpoint_auth_method: request.token_endpoint_auth_method,
-            id_token_signed_response_alg: request.id_token_signed_response_alg,
-            scope: request.scope,
-            software_id: request.software_id,
-            software_version: request.software_version,
-            registration_access_token,
-            registration_client_uri: format!("{}/oauth/register/{}", self.base_url, client_id),
+            token_endpoint_auth_method: request.token_endpoint_auth_method.clone(),
+            id_token_signed_response_alg: request.id_token_signed_response_alg.clone(),
+            scope: request.scope.clone(),
+            software_id: request.software_id.clone(),
+            software_version: request.software_version.clone(),
+            registration_access_token: generate_registration_access_token(),
+            registration_client_uri: format!("{}/clients/{}", self.base_url, client_id),
             client_id_issued_at: now.timestamp() as u64,
-        })
+        }
     }
 
     /// Get client configuration
@@ -730,11 +773,7 @@ impl ClientRegistrationManager {
                     }
                 }
                 "contacts" => {
-                    if request
-                        .contacts
-                        .as_ref()
-                        .map_or(true, |c| c.is_empty())
-                    {
+                    if request.contacts.as_ref().map_or(true, |c| c.is_empty()) {
                         return Err(ClientRegistrationError::PolicyViolation(
                             "contacts is required".to_string(),
                         ));

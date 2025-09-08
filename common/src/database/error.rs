@@ -54,11 +54,7 @@ pub enum DatabaseError {
 }
 
 // Conversion from common pool errors
-impl From<deadpool_redis::redis::RedisError> for DatabaseError {
-    fn from(err: deadpool_redis::redis::RedisError) -> Self {
-        DatabaseError::DeadpoolError(err.to_string())
-    }
-}
+
 
 impl From<deadpool_redis::PoolError> for DatabaseError {
     fn from(err: deadpool_redis::PoolError) -> Self {

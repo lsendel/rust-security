@@ -10,6 +10,33 @@ use crate::{
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Stub implementation for ThreatIntelligenceEngine
+pub struct ThreatIntelligenceEngine;
+
+impl ThreatIntelligenceEngine {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ThreatIntelligenceEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Implementation of ThreatDetectionAdapter for ThreatIntelligenceEngine
+#[async_trait::async_trait]
+impl crate::security::threat_detection::threat_adapter::ThreatDetectionAdapter for ThreatIntelligenceEngine {
+    async fn process_security_event(
+        &self,
+        _event: &crate::core::security::SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Stub implementation
+        Ok(())
+    }
+}
+
 /// Unified threat processing service
 pub struct ThreatProcessor {
     behavioral_analyzer: Arc<BehavioralAnalyzer>,
@@ -110,19 +137,17 @@ mod tests {
     async fn test_threat_processor_enabled() {
         // This test would need mock implementations of the threat modules
         // For now, we just test basic functionality
-        let config = crate::threat_behavioral_analyzer::BehavioralAnalysisConfig::default();
+        let config = crate::security::threat_behavioral_analyzer::BehavioralAnalysisConfig::default();
         let behavioral_analyzer = Arc::new(BehavioralAnalyzer::new(config));
-        let intelligence_engine = Arc::new(ThreatIntelligenceEngine::new(
-            crate::threat_intelligence::ThreatIntelligenceConfig::default(),
-        ));
+        let intelligence_engine = Arc::new(ThreatIntelligenceEngine::new());
         let response_orchestrator = Arc::new(ThreatResponseOrchestrator::new(
-            crate::threat_response_orchestrator::ThreatResponseConfig::default(),
+            crate::security::threat_response_orchestrator::ThreatResponseConfig::default(),
         ));
 
         let processor = ThreatProcessor::new(
             behavioral_analyzer,
             intelligence_engine,
-            response_orchestrator
+            response_orchestrator,
         );
 
         assert!(processor.is_enabled().await);

@@ -99,3 +99,6 @@ node_modules/
 package-lock.json
 dist/
 .eslintrc.json
+
+.gemini/
+gha-creds-*.json

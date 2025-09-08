@@ -5,11 +5,11 @@
 //! of infrastructure and presentation concerns.
 
 pub mod entities;
-pub mod value_objects;
 pub mod repositories;
 pub mod services;
+pub mod value_objects;
 
 // Re-export commonly used domain types
 pub use entities::*;
-pub use value_objects::*;
 pub use services::*;
+pub use value_objects::*;

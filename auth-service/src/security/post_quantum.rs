@@ -184,39 +184,7 @@ impl Drop for EncapsulationResult {
     }
 }
 
-/// Post-quantum configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PostQuantumConfig {
-    /// Default security level
-    pub default_security_level: SecurityLevel,
-    /// Enable hybrid classical/post-quantum mode
-    pub enable_hybrid_mode: bool,
-    /// Key rotation interval in days
-    pub key_rotation_interval_days: u32,
-    /// Maximum number of active keys
-    pub max_active_keys: usize,
-    /// Enable migration from classical to post-quantum
-    pub enable_migration_mode: bool,
-    /// Algorithms to support
-    pub supported_algorithms: Vec<PostQuantumAlgorithm>,
-}
-
-impl Default for PostQuantumConfig {
-    fn default() -> Self {
-        Self {
-            default_security_level: SecurityLevel::Level3,
-            enable_hybrid_mode: true,
-            key_rotation_interval_days: 30,
-            max_active_keys: 5,
-            enable_migration_mode: true,
-            supported_algorithms: vec![
-                PostQuantumAlgorithm::Dilithium(DilithiumVariant::Dilithium3),
-                PostQuantumAlgorithm::Kyber(KyberVariant::Kyber768),
-                PostQuantumAlgorithm::Hybrid,
-            ],
-        }
-    }
-}
+// PostQuantumConfig removed - using PQConfig instead for consistency
 
 /// Post-quantum metrics
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

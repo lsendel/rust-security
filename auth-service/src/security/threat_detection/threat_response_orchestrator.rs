@@ -1,6 +1,8 @@
 use crate::core::security::SecurityEvent;
 
-use crate::security::threat_detection::threat_adapter::{process_with_conversion, ThreatDetectionAdapter};
+use crate::security::threat_detection::threat_adapter::{
+    process_with_conversion, ThreatDetectionAdapter,
+};
 use crate::security::threat_detection::threat_types::{
     ActionResult, BusinessImpact, EscalationAction, EscalationRule, EscalationTrigger,
     MitigationAction, PlannedAction, ResponseStatus, RollbackPlan, SuccessCriterion,
@@ -551,7 +553,9 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Initialize core infrastructure components
-    async fn initialize_infrastructure(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn initialize_infrastructure(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Err(e) = self.initialize_redis().await {
             warn!("Failed to initialize Redis connection: {}", e);
         }
@@ -1421,7 +1425,6 @@ impl ThreatResponseOrchestrator {
         Ok(())
     }
 }
-
 
 #[async_trait::async_trait]
 impl ThreatDetectionAdapter for ThreatResponseOrchestrator {

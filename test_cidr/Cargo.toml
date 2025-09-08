@@ -1,0 +1,10 @@
+[package]
+name = "test_cidr"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# Empty workspace to prevent parent workspace inclusion
+
+[dependencies]
+ipnetwork = "0.20"

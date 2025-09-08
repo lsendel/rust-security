@@ -5,12 +5,12 @@
 //! NIST Cybersecurity Framework, and OWASP ASVS Level 3.
 
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Compliance frameworks supported by the assessment engine
@@ -359,7 +359,8 @@ pub struct ComplianceAssessmentEngine {
     /// Framework mappings
     framework_mappings: Arc<RwLock<HashMap<ComplianceFramework, Vec<String>>>>,
     /// Evidence collectors
-    evidence_collectors: Arc<RwLock<HashMap<EvidenceType, Box<dyn EvidenceCollector + Send + Sync>>>>,
+    evidence_collectors:
+        Arc<RwLock<HashMap<EvidenceType, Box<dyn EvidenceCollector + Send + Sync>>>>,
     /// Assessment scheduler
     scheduler: Arc<RwLock<AssessmentScheduler>>,
 }
@@ -387,8 +388,11 @@ pub struct ComplianceAssessmentConfig {
 #[async_trait::async_trait]
 pub trait EvidenceCollector: Send + Sync {
     /// Collect evidence for the specified control
-    async fn collect_evidence(&self, control: &ComplianceControl) -> Result<Vec<AssessmentEvidence>>;
-    
+    async fn collect_evidence(
+        &self,
+        control: &ComplianceControl,
+    ) -> Result<Vec<AssessmentEvidence>>;
+
     /// Validate existing evidence
     async fn validate_evidence(&self, evidence: &AssessmentEvidence) -> Result<bool>;
 }
@@ -441,7 +445,7 @@ impl ComplianceAssessmentEngine {
         let assessment_history = Arc::new(RwLock::new(VecDeque::new()));
         let framework_mappings = Arc::new(RwLock::new(HashMap::new()));
         let evidence_collectors = Arc::new(RwLock::new(HashMap::new()));
-        
+
         let scheduler = Arc::new(RwLock::new(AssessmentScheduler {
             last_assessment: Utc::now() - Duration::days(365), // Force initial assessment
             next_assessment_due: Utc::now(),
@@ -460,7 +464,7 @@ impl ComplianceAssessmentEngine {
 
         // Initialize default controls
         engine.initialize_default_controls().await?;
-        
+
         // Initialize framework mappings
         engine.initialize_framework_mappings().await?;
 
@@ -483,7 +487,7 @@ impl ComplianceAssessmentEngine {
     /// Initialize default compliance controls
     async fn initialize_default_controls(&self) -> Result<()> {
         let mut controls = self.controls.write().await;
-        
+
         // Access Control Controls
         controls.insert("AC-001".to_string(), ComplianceControl {
             id: "AC-001".to_string(),
@@ -524,64 +528,84 @@ impl ComplianceAssessmentEngine {
         });
 
         // Cryptography Controls
-        controls.insert("CR-001".to_string(), ComplianceControl {
-            id: "CR-001".to_string(),
-            name: "Post-Quantum Cryptography".to_string(),
-            description: "Implement post-quantum cryptographic algorithms for future-proof security".to_string(),
-            category: ControlCategory::Cryptography,
-            frameworks: [ComplianceFramework::NISTCSF, ComplianceFramework::OWASPASVS].into(),
-            status: ControlStatus::Implemented,
-            severity: AssessmentSeverity::High,
-            guidance: vec![
-                "Deploy CRYSTALS-Dilithium for digital signatures".to_string(),
-                "Implement CRYSTALS-Kyber for key encapsulation".to_string(),
-                "Maintain hybrid classical/post-quantum approach".to_string(),
-            ],
-            related_controls: vec!["CR-002".to_string()],
-            last_assessed: Utc::now() - Duration::days(7),
-            score: 0.95,
-            evidence: Vec::new(),
-        });
+        controls.insert(
+            "CR-001".to_string(),
+            ComplianceControl {
+                id: "CR-001".to_string(),
+                name: "Post-Quantum Cryptography".to_string(),
+                description:
+                    "Implement post-quantum cryptographic algorithms for future-proof security"
+                        .to_string(),
+                category: ControlCategory::Cryptography,
+                frameworks: [ComplianceFramework::NISTCSF, ComplianceFramework::OWASPASVS].into(),
+                status: ControlStatus::Implemented,
+                severity: AssessmentSeverity::High,
+                guidance: vec![
+                    "Deploy CRYSTALS-Dilithium for digital signatures".to_string(),
+                    "Implement CRYSTALS-Kyber for key encapsulation".to_string(),
+                    "Maintain hybrid classical/post-quantum approach".to_string(),
+                ],
+                related_controls: vec!["CR-002".to_string()],
+                last_assessed: Utc::now() - Duration::days(7),
+                score: 0.95,
+                evidence: Vec::new(),
+            },
+        );
 
         // Audit Logging Controls
-        controls.insert("AU-001".to_string(), ComplianceControl {
-            id: "AU-001".to_string(),
-            name: "Immutable Audit Logging".to_string(),
-            description: "Implement immutable audit logging with cryptographic integrity verification".to_string(),
-            category: ControlCategory::AuditLogging,
-            frameworks: [ComplianceFramework::SOX, ComplianceFramework::GDPR, ComplianceFramework::HIPAA].into(),
-            status: ControlStatus::Implemented,
-            severity: AssessmentSeverity::Critical,
-            guidance: vec![
-                "Deploy hash chain-based audit logging".to_string(),
-                "Implement digital signatures for non-repudiation".to_string(),
-                "Establish automated integrity verification".to_string(),
-            ],
-            related_controls: vec!["AU-002".to_string()],
-            last_assessed: Utc::now() - Duration::days(1),
-            score: 0.90,
-            evidence: Vec::new(),
-        });
+        controls.insert(
+            "AU-001".to_string(),
+            ComplianceControl {
+                id: "AU-001".to_string(),
+                name: "Immutable Audit Logging".to_string(),
+                description:
+                    "Implement immutable audit logging with cryptographic integrity verification"
+                        .to_string(),
+                category: ControlCategory::AuditLogging,
+                frameworks: [
+                    ComplianceFramework::SOX,
+                    ComplianceFramework::GDPR,
+                    ComplianceFramework::HIPAA,
+                ]
+                .into(),
+                status: ControlStatus::Implemented,
+                severity: AssessmentSeverity::Critical,
+                guidance: vec![
+                    "Deploy hash chain-based audit logging".to_string(),
+                    "Implement digital signatures for non-repudiation".to_string(),
+                    "Establish automated integrity verification".to_string(),
+                ],
+                related_controls: vec!["AU-002".to_string()],
+                last_assessed: Utc::now() - Duration::days(1),
+                score: 0.90,
+                evidence: Vec::new(),
+            },
+        );
 
         // Security Monitoring Controls
-        controls.insert("SM-001".to_string(), ComplianceControl {
-            id: "SM-001".to_string(),
-            name: "SIEM Integration".to_string(),
-            description: "Implement comprehensive SIEM integration for security event monitoring".to_string(),
-            category: ControlCategory::SystemIntegrity,
-            frameworks: [ComplianceFramework::NISTCSF, ComplianceFramework::ISO27001].into(),
-            status: ControlStatus::Implemented,
-            severity: AssessmentSeverity::High,
-            guidance: vec![
-                "Integrate with major SIEM platforms".to_string(),
-                "Implement real-time threat detection".to_string(),
-                "Establish automated response workflows".to_string(),
-            ],
-            related_controls: vec!["SM-002".to_string()],
-            last_assessed: Utc::now() - Duration::days(3),
-            score: 0.88,
-            evidence: Vec::new(),
-        });
+        controls.insert(
+            "SM-001".to_string(),
+            ComplianceControl {
+                id: "SM-001".to_string(),
+                name: "SIEM Integration".to_string(),
+                description:
+                    "Implement comprehensive SIEM integration for security event monitoring"
+                        .to_string(),
+                category: ControlCategory::SystemIntegrity,
+                frameworks: [ComplianceFramework::NISTCSF, ComplianceFramework::ISO27001].into(),
+                status: ControlStatus::Implemented,
+                severity: AssessmentSeverity::High,
+                guidance: vec![
+                    "Integrate with major SIEM platforms".to_string(),
+                    "Implement real-time threat detection".to_string(),
+                    "Establish automated response workflows".to_string(),
+                ],
+                related_controls: vec!["SM-002".to_string()],
+                last_assessed: Utc::now() - Duration::days(3),
+                score: 0.88,
+                evidence: Vec::new(),
+            },
+        );
 
         info!("Initialized {} default compliance controls", controls.len());
         Ok(())
@@ -590,24 +614,44 @@ impl ComplianceAssessmentEngine {
     /// Initialize framework control mappings
     async fn initialize_framework_mappings(&self) -> Result<()> {
         let mut mappings = self.framework_mappings.write().await;
-        
-        mappings.insert(ComplianceFramework::SOX, vec![
-            "AC-001".to_string(), "AC-002".to_string(), "AU-001".to_string(),
-        ]);
-        
-        mappings.insert(ComplianceFramework::GDPR, vec![
-            "AC-002".to_string(), "AU-001".to_string(), "CR-001".to_string(),
-        ]);
-        
-        mappings.insert(ComplianceFramework::NISTCSF, vec![
-            "AC-001".to_string(), "AC-002".to_string(), "CR-001".to_string(), "SM-001".to_string(),
-        ]);
-        
-        mappings.insert(ComplianceFramework::OWASPASVS, vec![
-            "AC-001".to_string(), "CR-001".to_string(),
-        ]);
 
-        info!("Initialized framework control mappings for {} frameworks", mappings.len());
+        mappings.insert(
+            ComplianceFramework::SOX,
+            vec![
+                "AC-001".to_string(),
+                "AC-002".to_string(),
+                "AU-001".to_string(),
+            ],
+        );
+
+        mappings.insert(
+            ComplianceFramework::GDPR,
+            vec![
+                "AC-002".to_string(),
+                "AU-001".to_string(),
+                "CR-001".to_string(),
+            ],
+        );
+
+        mappings.insert(
+            ComplianceFramework::NISTCSF,
+            vec![
+                "AC-001".to_string(),
+                "AC-002".to_string(),
+                "CR-001".to_string(),
+                "SM-001".to_string(),
+            ],
+        );
+
+        mappings.insert(
+            ComplianceFramework::OWASPASVS,
+            vec!["AC-001".to_string(), "CR-001".to_string()],
+        );
+
+        info!(
+            "Initialized framework control mappings for {} frameworks",
+            mappings.len()
+        );
         Ok(())
     }
 
@@ -617,30 +661,39 @@ impl ComplianceAssessmentEngine {
         frameworks: HashSet<ComplianceFramework>,
         assessment_type: AssessmentType,
     ) -> Result<ComplianceAssessmentReport> {
-        info!("Starting compliance assessment for frameworks: {:?}", frameworks);
-        
+        info!(
+            "Starting compliance assessment for frameworks: {:?}",
+            frameworks
+        );
+
         let assessment_id = Uuid::new_v4();
         let timestamp = Utc::now();
-        
+
         // Collect applicable controls
         let applicable_controls = self.get_applicable_controls(&frameworks).await?;
-        
+
         // Assess each control
         let mut control_assessments = Vec::new();
         let mut critical_findings = Vec::new();
         let mut high_priority_recommendations = Vec::new();
-        
+
         for control in applicable_controls {
             let assessed_control = self.assess_control(&control, &assessment_type).await?;
-            
+
             // Check for critical findings
-            if assessed_control.severity == AssessmentSeverity::Critical && 
-               assessed_control.status != ControlStatus::Implemented {
+            if assessed_control.severity == AssessmentSeverity::Critical
+                && assessed_control.status != ControlStatus::Implemented
+            {
                 critical_findings.push(ComplianceFinding {
                     id: Uuid::new_v4(),
-                    title: format!("Critical Control Not Implemented: {}", assessed_control.name),
-                    description: format!("Control {} ({}) is not properly implemented", 
-                                       assessed_control.id, assessed_control.name),
+                    title: format!(
+                        "Critical Control Not Implemented: {}",
+                        assessed_control.name
+                    ),
+                    description: format!(
+                        "Control {} ({}) is not properly implemented",
+                        assessed_control.id, assessed_control.name
+                    ),
                     affected_controls: vec![assessed_control.id.clone()],
                     severity: AssessmentSeverity::Critical,
                     frameworks: assessed_control.frameworks.clone(),
@@ -650,34 +703,41 @@ impl ComplianceAssessmentEngine {
                     recommended_actions: assessed_control.guidance.clone(),
                 });
             }
-            
+
             // Generate high-priority recommendations
             if assessed_control.score < self.config.minimum_control_score {
                 high_priority_recommendations.push(ComplianceRecommendation {
                     id: Uuid::new_v4(),
                     title: format!("Improve Control Implementation: {}", assessed_control.name),
-                    description: format!("Control {} requires improvement to meet compliance standards", 
-                                       assessed_control.name),
+                    description: format!(
+                        "Control {} requires improvement to meet compliance standards",
+                        assessed_control.name
+                    ),
                     priority: AssessmentSeverity::High,
-                    expected_benefit: "Enhanced security posture and regulatory compliance".to_string(),
+                    expected_benefit: "Enhanced security posture and regulatory compliance"
+                        .to_string(),
                     implementation_effort: RemediationEffort::Medium,
                     cost_estimate: CostEstimate::Medium,
                     timeline_estimate: TimelineEstimate::ShortTerm,
                 });
             }
-            
+
             control_assessments.push(assessed_control);
         }
-        
+
         // Calculate framework-specific scores
-        let framework_scores = self.calculate_framework_scores(&frameworks, &control_assessments).await?;
-        
+        let framework_scores = self
+            .calculate_framework_scores(&frameworks, &control_assessments)
+            .await?;
+
         // Calculate overall score
         let overall_score = framework_scores.values().sum::<f64>() / framework_scores.len() as f64;
-        
+
         // Generate remediation timeline
-        let remediation_timeline = self.generate_remediation_timeline(&critical_findings, &high_priority_recommendations).await?;
-        
+        let remediation_timeline = self
+            .generate_remediation_timeline(&critical_findings, &high_priority_recommendations)
+            .await?;
+
         let report = ComplianceAssessmentReport {
             id: assessment_id,
             timestamp,
@@ -699,59 +759,80 @@ impl ComplianceAssessmentEngine {
                     "Risk Analysis Framework".to_string(),
                 ],
                 duration_hours: 2.5,
-                next_assessment_due: timestamp + Duration::days(self.config.assessment_frequency_days as i64),
+                next_assessment_due: timestamp
+                    + Duration::days(self.config.assessment_frequency_days as i64),
             },
         };
-        
+
         // Store assessment report
-        self.assessment_history.write().await.push_back(report.clone());
-        
-        info!("Compliance assessment completed. Overall score: {:.2}", overall_score);
+        self.assessment_history
+            .write()
+            .await
+            .push_back(report.clone());
+
+        info!(
+            "Compliance assessment completed. Overall score: {:.2}",
+            overall_score
+        );
         Ok(report)
     }
 
     /// Get controls applicable to specified frameworks
-    async fn get_applicable_controls(&self, frameworks: &HashSet<ComplianceFramework>) -> Result<Vec<ComplianceControl>> {
+    async fn get_applicable_controls(
+        &self,
+        frameworks: &HashSet<ComplianceFramework>,
+    ) -> Result<Vec<ComplianceControl>> {
         let controls = self.controls.read().await;
         let mut applicable_controls = Vec::new();
-        
+
         for control in controls.values() {
             if control.frameworks.intersection(frameworks).count() > 0 {
                 applicable_controls.push(control.clone());
             }
         }
-        
+
         Ok(applicable_controls)
     }
 
     /// Assess individual control
-    async fn assess_control(&self, control: &ComplianceControl, _assessment_type: &AssessmentType) -> Result<ComplianceControl> {
+    async fn assess_control(
+        &self,
+        control: &ComplianceControl,
+        _assessment_type: &AssessmentType,
+    ) -> Result<ComplianceControl> {
         let mut assessed_control = control.clone();
-        
+
         // Collect evidence if enabled
         if self.config.evidence_collection_enabled {
             assessed_control.evidence = self.collect_control_evidence(control).await?;
         }
-        
+
         // Calculate control score based on implementation status and evidence
-        assessed_control.score = self.calculate_control_score(control, &assessed_control.evidence).await?;
-        
+        assessed_control.score = self
+            .calculate_control_score(control, &assessed_control.evidence)
+            .await?;
+
         // Update assessment timestamp
         assessed_control.last_assessed = Utc::now();
-        
+
         // Determine control status based on score and evidence
         assessed_control.status = self.determine_control_status(&assessed_control).await?;
-        
-        debug!("Assessed control {}: score={:.2}, status={:?}", 
-               assessed_control.id, assessed_control.score, assessed_control.status);
-        
+
+        debug!(
+            "Assessed control {}: score={:.2}, status={:?}",
+            assessed_control.id, assessed_control.score, assessed_control.status
+        );
+
         Ok(assessed_control)
     }
 
     /// Collect evidence for a control
-    async fn collect_control_evidence(&self, control: &ComplianceControl) -> Result<Vec<AssessmentEvidence>> {
+    async fn collect_control_evidence(
+        &self,
+        control: &ComplianceControl,
+    ) -> Result<Vec<AssessmentEvidence>> {
         let mut evidence = Vec::new();
-        
+
         // Simulate evidence collection based on control category
         match control.category {
             ControlCategory::AccessControl => {
@@ -795,12 +876,16 @@ impl ComplianceAssessmentEngine {
                 });
             }
         }
-        
+
         Ok(evidence)
     }
 
     /// Calculate control score based on implementation and evidence
-    async fn calculate_control_score(&self, control: &ComplianceControl, evidence: &[AssessmentEvidence]) -> Result<f64> {
+    async fn calculate_control_score(
+        &self,
+        control: &ComplianceControl,
+        evidence: &[AssessmentEvidence],
+    ) -> Result<f64> {
         let mut score = match control.status {
             ControlStatus::Implemented => 0.9,
             ControlStatus::PartiallyImplemented => 0.6,
@@ -809,22 +894,24 @@ impl ComplianceAssessmentEngine {
             ControlStatus::Pending => 0.3,
             ControlStatus::RequiresRemediation => 0.4,
         };
-        
+
         // Adjust score based on evidence quality and validation
         if !evidence.is_empty() {
-            let evidence_score: f64 = evidence.iter()
+            let evidence_score: f64 = evidence
+                .iter()
                 .filter(|e| e.validated)
                 .map(|e| e.weight)
-                .sum::<f64>() / evidence.len() as f64;
-            
+                .sum::<f64>()
+                / evidence.len() as f64;
+
             score = (score + evidence_score) / 2.0;
         }
-        
+
         // Apply severity penalty for critical controls
         if control.severity == AssessmentSeverity::Critical && score < 0.8 {
             score *= 0.8; // Penalty for critical control gaps
         }
-        
+
         Ok(score.min(1.0).max(0.0))
     }
 
@@ -839,7 +926,7 @@ impl ComplianceAssessmentEngine {
         } else {
             ControlStatus::NotImplemented
         };
-        
+
         Ok(status)
     }
 
@@ -851,13 +938,14 @@ impl ComplianceAssessmentEngine {
     ) -> Result<HashMap<ComplianceFramework, f64>> {
         let mut framework_scores = HashMap::new();
         let mappings = self.framework_mappings.read().await;
-        
+
         for framework in frameworks {
             if let Some(control_ids) = mappings.get(framework) {
-                let applicable_assessments: Vec<_> = control_assessments.iter()
+                let applicable_assessments: Vec<_> = control_assessments
+                    .iter()
                     .filter(|c| control_ids.contains(&c.id))
                     .collect();
-                
+
                 if !applicable_assessments.is_empty() {
                     let total_score: f64 = applicable_assessments.iter().map(|c| c.score).sum();
                     let average_score = total_score / applicable_assessments.len() as f64;
@@ -867,7 +955,7 @@ impl ComplianceAssessmentEngine {
                 }
             }
         }
-        
+
         Ok(framework_scores)
     }
 
@@ -878,7 +966,7 @@ impl ComplianceAssessmentEngine {
         recommendations: &[ComplianceRecommendation],
     ) -> Result<Vec<RemediationAction>> {
         let mut actions = Vec::new();
-        
+
         // Create actions for critical findings (immediate priority)
         for finding in critical_findings {
             actions.push(RemediationAction {
@@ -892,7 +980,7 @@ impl ComplianceAssessmentEngine {
                 effort: finding.remediation_effort.clone(),
             });
         }
-        
+
         // Create actions for high-priority recommendations
         for recommendation in recommendations {
             let due_date = match recommendation.timeline_estimate {
@@ -902,7 +990,7 @@ impl ComplianceAssessmentEngine {
                 TimelineEstimate::LongTerm => Utc::now() + Duration::days(365),
                 TimelineEstimate::Strategic => Utc::now() + Duration::days(730),
             };
-            
+
             actions.push(RemediationAction {
                 id: Uuid::new_v4(),
                 title: recommendation.title.clone(),
@@ -914,7 +1002,7 @@ impl ComplianceAssessmentEngine {
                 effort: recommendation.implementation_effort.clone(),
             });
         }
-        
+
         Ok(actions)
     }
 
@@ -923,33 +1011,39 @@ impl ComplianceAssessmentEngine {
         if !self.config.automated_assessment_enabled {
             return Ok(());
         }
-        
+
         let config = Arc::clone(&self.config);
         let engine = self.clone_for_scheduler();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600)); // Check hourly
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let should_assess = {
                     let scheduler = engine.scheduler.read().await;
                     Utc::now() >= scheduler.next_assessment_due
                 };
-                
+
                 if should_assess {
                     info!("Starting scheduled compliance assessment");
-                    
-                    match engine.perform_assessment(config.enabled_frameworks.clone(), AssessmentType::Full).await {
+
+                    match engine
+                        .perform_assessment(config.enabled_frameworks.clone(), AssessmentType::Full)
+                        .await
+                    {
                         Ok(report) => {
-                            info!("Scheduled assessment completed. Overall score: {:.2}", report.overall_score);
-                            
+                            info!(
+                                "Scheduled assessment completed. Overall score: {:.2}",
+                                report.overall_score
+                            );
+
                             // Update next assessment due date
                             let mut scheduler = engine.scheduler.write().await;
                             scheduler.last_assessment = Utc::now();
-                            scheduler.next_assessment_due = Utc::now() + 
-                                Duration::days(config.assessment_frequency_days as i64);
+                            scheduler.next_assessment_due = Utc::now()
+                                + Duration::days(config.assessment_frequency_days as i64);
                         }
                         Err(e) => {
                             error!("Scheduled assessment failed: {}", e);
@@ -958,7 +1052,7 @@ impl ComplianceAssessmentEngine {
                 }
             }
         });
-        
+
         info!("Automated compliance assessment scheduler started");
         Ok(())
     }
@@ -982,17 +1076,29 @@ impl ComplianceAssessmentEngine {
 
     /// Get assessment history
     pub async fn get_assessment_history(&self) -> Vec<ComplianceAssessmentReport> {
-        self.assessment_history.read().await.iter().cloned().collect()
+        self.assessment_history
+            .read()
+            .await
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// Add custom control
     pub async fn add_control(&self, control: ComplianceControl) -> Result<()> {
-        self.controls.write().await.insert(control.id.clone(), control);
+        self.controls
+            .write()
+            .await
+            .insert(control.id.clone(), control);
         Ok(())
     }
 
     /// Update control status
-    pub async fn update_control_status(&self, control_id: &str, status: ControlStatus) -> Result<()> {
+    pub async fn update_control_status(
+        &self,
+        control_id: &str,
+        status: ControlStatus,
+    ) -> Result<()> {
         if let Some(control) = self.controls.write().await.get_mut(control_id) {
             control.status = status;
             control.last_assessed = Utc::now();
@@ -1010,7 +1116,8 @@ impl Default for ComplianceAssessmentConfig {
                 ComplianceFramework::SOX,
                 ComplianceFramework::NISTCSF,
                 ComplianceFramework::OWASPASVS,
-            ].into(),
+            ]
+            .into(),
             assessment_frequency_days: 30,
             automated_assessment_enabled: true,
             evidence_collection_enabled: true,
@@ -1029,7 +1136,7 @@ mod tests {
     async fn test_compliance_assessment_engine_creation() {
         let config = ComplianceAssessmentConfig::default();
         let engine = ComplianceAssessmentEngine::new(config).await.unwrap();
-        
+
         let controls = engine.controls.read().await;
         assert!(!controls.is_empty());
         assert!(controls.contains_key("AC-001"));
@@ -1040,12 +1147,17 @@ mod tests {
     async fn test_framework_assessment() {
         let config = ComplianceAssessmentConfig::default();
         let engine = ComplianceAssessmentEngine::new(config).await.unwrap();
-        
+
         let frameworks = [ComplianceFramework::NISTCSF].into();
-        let report = engine.perform_assessment(frameworks, AssessmentType::Full).await.unwrap();
-        
+        let report = engine
+            .perform_assessment(frameworks, AssessmentType::Full)
+            .await
+            .unwrap();
+
         assert!(!report.control_assessments.is_empty());
-        assert!(report.framework_scores.contains_key(&ComplianceFramework::NISTCSF));
+        assert!(report
+            .framework_scores
+            .contains_key(&ComplianceFramework::NISTCSF));
         assert!(report.overall_score >= 0.0 && report.overall_score <= 1.0);
     }
 
@@ -1053,7 +1165,7 @@ mod tests {
     async fn test_control_score_calculation() {
         let config = ComplianceAssessmentConfig::default();
         let engine = ComplianceAssessmentEngine::new(config).await.unwrap();
-        
+
         let control = ComplianceControl {
             id: "TEST-001".to_string(),
             name: "Test Control".to_string(),
@@ -1068,7 +1180,7 @@ mod tests {
             score: 0.0,
             evidence: Vec::new(),
         };
-        
+
         let evidence = vec![AssessmentEvidence {
             evidence_type: EvidenceType::AutomatedScan,
             description: "Test evidence".to_string(),
@@ -1077,8 +1189,11 @@ mod tests {
             weight: 0.8,
             validated: true,
         }];
-        
-        let score = engine.calculate_control_score(&control, &evidence).await.unwrap();
+
+        let score = engine
+            .calculate_control_score(&control, &evidence)
+            .await
+            .unwrap();
         assert!(score >= 0.0 && score <= 1.0);
         assert!(score > 0.8); // Should be high for implemented control with good evidence
     }
@@ -1087,7 +1202,7 @@ mod tests {
     async fn test_remediation_timeline_generation() {
         let config = ComplianceAssessmentConfig::default();
         let engine = ComplianceAssessmentEngine::new(config).await.unwrap();
-        
+
         let critical_finding = ComplianceFinding {
             id: Uuid::new_v4(),
             title: "Test Critical Finding".to_string(),
@@ -1100,7 +1215,7 @@ mod tests {
             evidence: Vec::new(),
             recommended_actions: Vec::new(),
         };
-        
+
         let recommendation = ComplianceRecommendation {
             id: Uuid::new_v4(),
             title: "Test Recommendation".to_string(),
@@ -1111,8 +1226,11 @@ mod tests {
             cost_estimate: CostEstimate::Low,
             timeline_estimate: TimelineEstimate::ShortTerm,
         };
-        
-        let timeline = engine.generate_remediation_timeline(&[critical_finding], &[recommendation]).await.unwrap();
+
+        let timeline = engine
+            .generate_remediation_timeline(&[critical_finding], &[recommendation])
+            .await
+            .unwrap();
         assert_eq!(timeline.len(), 2);
         assert!(timeline[0].due_date < timeline[1].due_date); // Critical should be due first
     }
@@ -1121,11 +1239,9 @@ mod tests {
     fn test_compliance_framework_enum() {
         let framework = ComplianceFramework::SOX;
         assert_eq!(format!("{:?}", framework), "SOX");
-        
-        let frameworks: HashSet<ComplianceFramework> = [
-            ComplianceFramework::GDPR,
-            ComplianceFramework::HIPAA,
-        ].into();
+
+        let frameworks: HashSet<ComplianceFramework> =
+            [ComplianceFramework::GDPR, ComplianceFramework::HIPAA].into();
         assert_eq!(frameworks.len(), 2);
     }
 

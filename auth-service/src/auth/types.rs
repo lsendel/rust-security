@@ -18,7 +18,7 @@ pub struct AuthState {
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
     pub pkce_manager: Arc<crate::pkce::PkceManager>,
-    pub jwt_blacklist: Arc<crate::jwt_blacklist::JwtBlacklist>,
+    pub jwt_blacklist: Arc<crate::application::auth::jwt_blacklist::JwtBlacklist>,
 }
 
 impl AuthState {
@@ -29,7 +29,7 @@ impl AuthState {
             oauth_clients: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             pkce_manager: Arc::new(crate::pkce::PkceManager::new()),
-            jwt_blacklist: Arc::new(crate::jwt_blacklist::JwtBlacklist::new()),
+            jwt_blacklist: Arc::new(crate::application::auth::jwt_blacklist::JwtBlacklist::new()),
         }
     }
 }

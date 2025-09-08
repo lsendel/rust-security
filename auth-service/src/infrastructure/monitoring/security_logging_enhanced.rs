@@ -1,16 +1,16 @@
 // Enhanced Security Logging Implementation
 // Privacy-safe, structured security event logging with correlation
 
+use chrono::{DateTime, Utc};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use sha2::{Sha256, Digest};
-use regex::Regex;
 
 /// Security event types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -20,34 +20,36 @@ pub enum SecurityEventType {
     AuthenticationSuccess,
     AuthenticationFailure,
     AuthenticationAttempt,
-    
+
     // Authorization events
     AuthorizationSuccess,
     AuthorizationFailure,
     PermissionDenied,
-    
+
     // Session events
     SessionCreated,
     SessionDestroyed,
     SessionExpired,
     SessionHijackAttempt,
-    
+
     // Rate limiting events
     RateLimitExceeded,
     RateLimitWarning,
-    
+
     // Security violations
     CsrfTokenMissing,
     CsrfTokenInvalid,
     SqlInjectionAttempt,
     XssAttempt,
     SuspiciousActivity,
-    
+    SecurityViolation,
+    DataAccess,
+
     // System events
     ConfigurationChange,
     SecurityPolicyViolation,
     ThreatDetected,
-    
+
     // Attack patterns
     BruteForceAttempt,
     CredentialStuffing,
@@ -59,7 +61,7 @@ impl std::fmt::Display for SecurityEventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             SecurityEventType::AuthenticationSuccess => "authentication_success",
-            SecurityEventType::AuthenticationFailure => "authentication_failure", 
+            SecurityEventType::AuthenticationFailure => "authentication_failure",
             SecurityEventType::AuthenticationAttempt => "authentication_attempt",
             SecurityEventType::AuthorizationSuccess => "authorization_success",
             SecurityEventType::AuthorizationFailure => "authorization_failure",
@@ -82,6 +84,8 @@ impl std::fmt::Display for SecurityEventType {
             SecurityEventType::CredentialStuffing => "credential_stuffing",
             SecurityEventType::AccountEnumeration => "account_enumeration",
             SecurityEventType::PrivilegeEscalation => "privilege_escalation",
+            SecurityEventType::SecurityViolation => "security_violation",
+            SecurityEventType::DataAccess => "data_access",
         };
         write!(f, "{}", s)
     }
@@ -103,7 +107,7 @@ impl std::fmt::Display for SecuritySeverity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             SecuritySeverity::Info => "info",
-            SecuritySeverity::Low => "low", 
+            SecuritySeverity::Low => "low",
             SecuritySeverity::Medium => "medium",
             SecuritySeverity::High => "high",
             SecuritySeverity::Critical => "critical",
@@ -183,6 +187,61 @@ pub struct ThreatIntelligence {
     pub is_proxy: bool,
 }
 
+impl SecurityEvent {
+    /// Create a new security event
+    pub fn new(
+        event_type: SecurityEventType,
+        severity: SecuritySeverity,
+        correlation_id: String,
+    ) -> Self {
+        Self {
+            event_id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            event_type,
+            severity,
+            source_ip: None,
+            user_id_hash: None,
+            correlation_id,
+            session_id_hash: None,
+            user_agent: None,
+            request_path: None,
+            request_method: None,
+            response_status: None,
+            latency_ms: None,
+            threat_indicators: Vec::new(),
+            geo_location: None,
+            ip_reputation: None,
+            additional_context: serde_json::Map::new(),
+            tags: Vec::new(),
+            privacy_safe_details: None,
+        }
+    }
+
+    /// Add additional context and return self for method chaining
+    pub fn with_context(mut self, key: String, value: serde_json::Value) -> Self {
+        self.additional_context.insert(key, value);
+        self
+    }
+
+    /// Add user information
+    pub fn with_user(mut self, user_id_hash: String) -> Self {
+        self.user_id_hash = Some(user_id_hash);
+        self
+    }
+
+    /// Add IP information
+    pub fn with_source_ip(mut self, ip: IpAddr) -> Self {
+        self.source_ip = Some(ip);
+        self
+    }
+
+    /// Add reason for the event
+    pub fn with_reason(mut self, reason: String) -> Self {
+        self.additional_context.insert("reason".to_string(), serde_json::Value::String(reason));
+        self
+    }
+}
+
 /// IP reputation information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpReputation {
@@ -203,7 +262,8 @@ pub struct PiiDetector {
 impl PiiDetector {
     pub fn new() -> Self {
         Self {
-            email_regex: Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
+            email_regex: Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+                .unwrap(),
             phone_regex: Regex::new(r"\b\d{3}-\d{3}-\d{4}\b|\b\(\d{3}\)\s*\d{3}-\d{4}\b").unwrap(),
             ssn_regex: Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap(),
             credit_card_regex: Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap(),
@@ -212,19 +272,31 @@ impl PiiDetector {
 
     pub fn sanitize_text(&self, text: &str) -> String {
         let mut sanitized = text.to_string();
-        
+
         // Replace email addresses
-        sanitized = self.email_regex.replace_all(&sanitized, "[EMAIL_REDACTED]").to_string();
-        
+        sanitized = self
+            .email_regex
+            .replace_all(&sanitized, "[EMAIL_REDACTED]")
+            .to_string();
+
         // Replace phone numbers
-        sanitized = self.phone_regex.replace_all(&sanitized, "[PHONE_REDACTED]").to_string();
-        
+        sanitized = self
+            .phone_regex
+            .replace_all(&sanitized, "[PHONE_REDACTED]")
+            .to_string();
+
         // Replace SSNs
-        sanitized = self.ssn_regex.replace_all(&sanitized, "[SSN_REDACTED]").to_string();
-        
+        sanitized = self
+            .ssn_regex
+            .replace_all(&sanitized, "[SSN_REDACTED]")
+            .to_string();
+
         // Replace credit card numbers
-        sanitized = self.credit_card_regex.replace_all(&sanitized, "[CC_REDACTED]").to_string();
-        
+        sanitized = self
+            .credit_card_regex
+            .replace_all(&sanitized, "[CC_REDACTED]")
+            .to_string();
+
         sanitized
     }
 
@@ -237,7 +309,7 @@ impl PiiDetector {
     pub fn hash_identifier(&self, identifier: &str) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         identifier.hash(&mut hasher);
         format!("hash:{:x}", hasher.finish())
@@ -303,7 +375,7 @@ impl SecurityLogger {
         // Sanitize PII if enabled
         if self.config.enable_pii_protection {
             event.description = self.pii_detector.sanitize_text(&event.description);
-            
+
             // Sanitize metadata
             if let Some(ref mut user_agent) = event.metadata.user_agent {
                 *user_agent = self.pii_detector.sanitize_text(user_agent);
@@ -336,7 +408,8 @@ impl SecurityLogger {
 
     /// Log authentication success
     pub async fn log_auth_success(&self, user_id: &str, ip: IpAddr, correlation_id: &str) {
-        let event = self.event_builder()
+        let event = self
+            .event_builder()
             .event_type(SecurityEventType::AuthenticationSuccess)
             .severity(SecuritySeverity::Info)
             .source_ip(ip)
@@ -344,13 +417,20 @@ impl SecurityLogger {
             .correlation_id(correlation_id)
             .description("User authentication successful".to_string())
             .build();
-        
+
         self.log_event(event).await;
     }
 
     /// Log authentication failure
-    pub async fn log_auth_failure(&self, attempted_user: &str, ip: IpAddr, correlation_id: &str, reason: &str) {
-        let event = self.event_builder()
+    pub async fn log_auth_failure(
+        &self,
+        attempted_user: &str,
+        ip: IpAddr,
+        correlation_id: &str,
+        reason: &str,
+    ) {
+        let event = self
+            .event_builder()
             .event_type(SecurityEventType::AuthenticationFailure)
             .severity(SecuritySeverity::Medium)
             .source_ip(ip)
@@ -358,7 +438,7 @@ impl SecurityLogger {
             .correlation_id(correlation_id)
             .description(format!("Authentication failed: {}", reason))
             .build();
-        
+
         self.log_event(event).await;
     }
 
@@ -366,8 +446,9 @@ impl SecurityLogger {
     pub async fn log_rate_limit_exceeded(&self, ip: IpAddr, endpoint: &str, correlation_id: &str) {
         let mut metadata = SecurityMetadata::default();
         metadata.endpoint = Some(endpoint.to_string());
-        
-        let event = self.event_builder()
+
+        let event = self
+            .event_builder()
             .event_type(SecurityEventType::RateLimitExceeded)
             .severity(SecuritySeverity::Medium)
             .source_ip(ip)
@@ -375,7 +456,7 @@ impl SecurityLogger {
             .description(format!("Rate limit exceeded for endpoint: {}", endpoint))
             .metadata(metadata)
             .build();
-        
+
         self.log_event(event).await;
     }
 
@@ -383,8 +464,9 @@ impl SecurityLogger {
     pub async fn log_csrf_violation(&self, ip: IpAddr, endpoint: &str, correlation_id: &str) {
         let mut metadata = SecurityMetadata::default();
         metadata.endpoint = Some(endpoint.to_string());
-        
-        let event = self.event_builder()
+
+        let event = self
+            .event_builder()
             .event_type(SecurityEventType::CsrfTokenInvalid)
             .severity(SecuritySeverity::High)
             .source_ip(ip)
@@ -392,20 +474,26 @@ impl SecurityLogger {
             .description(format!("CSRF token violation on endpoint: {}", endpoint))
             .metadata(metadata)
             .build();
-        
+
         self.log_event(event).await;
     }
 
     /// Log suspicious activity
-    pub async fn log_suspicious_activity(&self, ip: IpAddr, description: &str, correlation_id: &str) {
-        let event = self.event_builder()
+    pub async fn log_suspicious_activity(
+        &self,
+        ip: IpAddr,
+        description: &str,
+        correlation_id: &str,
+    ) {
+        let event = self
+            .event_builder()
             .event_type(SecurityEventType::SuspiciousActivity)
             .severity(SecuritySeverity::High)
             .source_ip(ip)
             .correlation_id(correlation_id)
             .description(description.to_string())
             .build();
-        
+
         self.log_event(event).await;
     }
 
@@ -447,8 +535,9 @@ impl SecurityLogger {
 
     /// Log structured event
     async fn log_structured(&self, event: &SecurityEvent) {
-        let json = serde_json::to_string(event).unwrap_or_else(|_| "Failed to serialize event".to_string());
-        
+        let json = serde_json::to_string(event)
+            .unwrap_or_else(|_| "Failed to serialize event".to_string());
+
         match event.severity {
             SecuritySeverity::Critical => error!(target: "security", "{}", json),
             SecuritySeverity::High => error!(target: "security", "{}", json),
@@ -493,15 +582,17 @@ impl SecurityLogger {
     pub async fn get_event_stats(&self) -> SecurityEventStats {
         let buffer = self.event_buffer.read().await;
         let total_events = buffer.len();
-        
+
         let mut severity_counts = HashMap::new();
         let mut event_type_counts = HashMap::new();
-        
+
         for event in buffer.iter() {
             *severity_counts.entry(event.severity.clone()).or_insert(0) += 1;
-            *event_type_counts.entry(event.event_type.clone()).or_insert(0) += 1;
+            *event_type_counts
+                .entry(event.event_type.clone())
+                .or_insert(0) += 1;
         }
-        
+
         SecurityEventStats {
             total_events,
             severity_counts,
@@ -603,10 +694,10 @@ mod tests {
     #[test]
     fn test_pii_detection() {
         let detector = PiiDetector::new();
-        
+
         let text = "Contact john.doe@example.com or call 555-123-4567";
         let sanitized = detector.sanitize_text(text);
-        
+
         assert!(sanitized.contains("[EMAIL_REDACTED]"));
         assert!(sanitized.contains("[PHONE_REDACTED]"));
     }
@@ -615,10 +706,10 @@ mod tests {
     async fn test_security_event_logging() {
         let config = SecurityLoggerConfig::default();
         let logger = SecurityLogger::new(config);
-        
+
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         logger.log_auth_success("user123", ip, "corr-123").await;
-        
+
         let stats = logger.get_event_stats().await;
         assert_eq!(stats.total_events, 1);
     }
@@ -631,7 +722,7 @@ mod tests {
             .user_id("test_user")
             .description("Test event".to_string())
             .build();
-        
+
         assert_eq!(event.event_type, SecurityEventType::AuthenticationSuccess);
         assert_eq!(event.severity, SecuritySeverity::Info);
         assert!(event.user_id_hash.is_some());

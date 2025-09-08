@@ -33,8 +33,7 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 anyhow = { workspace = true }
 config = { workspace = true }
-redis = { workspace = true }
-deadpool-redis = { workspace = true }
+# Redis dependencies moved to optional section below
 utoipa = { workspace = true }
 validator = { workspace = true }
 argon2 = { workspace = true }
@@ -81,12 +80,18 @@ petgraph = { workspace = true }
 derive_more = { workspace = true }
 lazy_static = { workspace = true }
 tracing-appender = { workspace = true, optional = true }
+tokio-util = { workspace = true }
+aes-gcm = { workspace = true, optional = true }
 
-# Post-quantum cryptography dependencies
-pqcrypto-dilithium = { version = "0.5", optional = true }
-pqcrypto-kyber = { version = "0.7", optional = true }
+# Post-quantum cryptography dependencies (updated to maintained versions)
+pqcrypto-mldsa = { version = "0.1", optional = true }  # Replaces pqcrypto-dilithium
+pqcrypto-mlkem = { version = "0.1", optional = true }  # Replaces pqcrypto-kyber
 pqcrypto-sphincsplus = { version = "0.5", optional = true }
 pqcrypto-traits = { version = "0.3", optional = true }
+
+# Redis dependencies for distributed rate limiting
+redis = { workspace = true, optional = true }
+deadpool-redis = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -110,7 +115,7 @@ serial_test = "2.0"
 
 [features]
 # MVP-focused feature set
-default = ["security-essential", "vault", "user-auth", "oauth", "jwt-auth", "postgres", "api-keys", "metrics", "redis-sessions"]
+default = ["security-essential", "vault", "user-auth", "oauth", "jwt-auth", "postgres", "api-keys", "metrics", "redis-sessions", "redis-rate-limiting"]
 security-essential = ["crypto", "rate-limiting"]
 full-integration = []
 redis-sessions = []  # Redis dependencies are now always enabled
@@ -122,13 +127,16 @@ user-auth = []
 oauth = []
 jwt-auth = []
 
+saml = ["dep:aes-gcm"]
+
 # Core dependencies
 crypto = ["ed25519-dalek"]
 rate-limiting = []
+redis-rate-limiting = ["dep:redis", "dep:deadpool-redis"]
 monitoring = []
 post-quantum = [
-    "dep:pqcrypto-dilithium",
-    "dep:pqcrypto-kyber",
+    "dep:pqcrypto-mldsa",      # Updated from pqcrypto-dilithium
+    "dep:pqcrypto-mlkem",      # Updated from pqcrypto-kyber
     "dep:pqcrypto-sphincsplus",
     "dep:pqcrypto-traits"
 ]

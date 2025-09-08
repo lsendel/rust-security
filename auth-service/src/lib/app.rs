@@ -15,7 +15,9 @@ pub struct App {
 
 impl App {
     /// Create a new application instance
-    pub async fn new(config: Arc<crate::config::Config>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(
+        config: Arc<crate::config::Config>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let container = crate::app::AppContainer::new().await?;
         let router = crate::app::router::create_router(container);
 

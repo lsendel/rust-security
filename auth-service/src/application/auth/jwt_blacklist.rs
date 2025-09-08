@@ -126,13 +126,13 @@ impl JwtBlacklist {
         };
 
         let mut tokens = self.blacklisted_tokens.write().await;
-        
+
         if tokens.contains_key(&jti) {
             return Err(BlacklistError::TokenAlreadyBlacklisted);
         }
 
         tokens.insert(jti.clone(), blacklisted_token);
-        
+
         info!(
             jti = %jti,
             user_id = %user_id,
@@ -146,13 +146,13 @@ impl JwtBlacklist {
     /// Check if a token is blacklisted
     pub async fn is_token_blacklisted(&self, jti: &str) -> bool {
         let tokens = self.blacklisted_tokens.read().await;
-        
+
         if let Some(blacklisted_token) = tokens.get(jti) {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            
+
             // Check if the blacklisted entry itself has expired
             if now >= blacklisted_token.expires_at {
                 // Token blacklist entry has expired, consider it not blacklisted
@@ -201,7 +201,7 @@ impl JwtBlacklist {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        
+
         let initial_count = tokens.len();
         tokens.retain(|_, token| now < token.expires_at);
         let cleaned_count = initial_count - tokens.len();
@@ -226,12 +226,10 @@ impl JwtBlacklist {
             .filter(|token| now >= token.expires_at)
             .count();
 
-        let reason_counts = tokens
-            .values()
-            .fold(HashMap::new(), |mut acc, token| {
-                *acc.entry(format!("{}", token.reason)).or_insert(0) += 1;
-                acc
-            });
+        let reason_counts = tokens.values().fold(HashMap::new(), |mut acc, token| {
+            *acc.entry(format!("{}", token.reason)).or_insert(0) += 1;
+            acc
+        });
 
         BlacklistStats {
             total_entries: tokens.len(),
@@ -251,7 +249,7 @@ impl JwtBlacklist {
 
         // Decode payload (second part)
         let payload = parts[1];
-        
+
         // Add padding if necessary for base64 decoding
         let padded_payload = match payload.len() % 4 {
             0 => payload.to_string(),
@@ -264,12 +262,11 @@ impl JwtBlacklist {
             .decode(padded_payload)
             .map_err(|_| BlacklistError::InvalidToken)?;
 
-        let payload_str = String::from_utf8(decoded)
-            .map_err(|_| BlacklistError::InvalidToken)?;
+        let payload_str = String::from_utf8(decoded).map_err(|_| BlacklistError::InvalidToken)?;
 
         // Parse JSON to extract jti claim
-        let payload_json: serde_json::Value = serde_json::from_str(&payload_str)
-            .map_err(|_| BlacklistError::InvalidToken)?;
+        let payload_json: serde_json::Value =
+            serde_json::from_str(&payload_str).map_err(|_| BlacklistError::InvalidToken)?;
 
         payload_json
             .get("jti")
@@ -281,10 +278,10 @@ impl JwtBlacklist {
     /// Start a background task to periodically clean up expired entries
     pub async fn start_cleanup_task(&self, interval: Duration) {
         let blacklist = Arc::new(self.clone());
-        
+
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
                 blacklist.cleanup_expired_entries().await;
@@ -318,9 +315,11 @@ pub async fn check_token_blacklist(
     token: &str,
 ) -> Result<(), BlacklistError> {
     let jti = blacklist.extract_jti_from_token(token)?;
-    
+
     if blacklist.is_token_blacklisted(&jti).await {
-        return Err(BlacklistError::StorageError("Token is blacklisted".to_string()));
+        return Err(BlacklistError::StorageError(
+            "Token is blacklisted".to_string(),
+        ));
     }
 
     Ok(())
@@ -343,13 +342,7 @@ mod tests {
 
         // Blacklist the token
         assert!(blacklist
-            .blacklist_token(
-                jti.clone(),
-                issuer,
-                user_id,
-                None,
-                BlacklistReason::Logout
-            )
+            .blacklist_token(jti.clone(), issuer, user_id, None, BlacklistReason::Logout)
             .await
             .is_ok());
 

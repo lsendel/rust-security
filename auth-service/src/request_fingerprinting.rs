@@ -4,9 +4,9 @@
 //! for requests to detect suspicious patterns and anomalous behavior.
 
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
@@ -126,7 +126,7 @@ impl Default for FingerprintingConfig {
             analysis_window: 3600, // 1 hour
             min_requests_for_pattern: 10,
             anomaly_sensitivity: 0.7,
-            enable_geo_analysis: false, // Requires external service
+            enable_geo_analysis: false,       // Requires external service
             enable_tls_fingerprinting: false, // Requires TLS layer access
         }
     }
@@ -192,7 +192,8 @@ impl RequestFingerprintAnalyzer {
 
         // Compute composite fingerprint hash
         let mut fingerprint_with_hash = fingerprint;
-        fingerprint_with_hash.fingerprint_hash = self.compute_fingerprint_hash(&fingerprint_with_hash);
+        fingerprint_with_hash.fingerprint_hash =
+            self.compute_fingerprint_hash(&fingerprint_with_hash);
 
         fingerprint_with_hash
     }
@@ -220,9 +221,11 @@ impl RequestFingerprintAnalyzer {
         let mut indicators = Vec::new();
 
         // Check for various anomaly types
-        anomaly_score += self.analyze_frequency_anomalies(&fingerprint, ip_patterns, &mut indicators);
+        anomaly_score +=
+            self.analyze_frequency_anomalies(&fingerprint, ip_patterns, &mut indicators);
         anomaly_score += self.analyze_pattern_anomalies(&fingerprint, ip_patterns, &mut indicators);
-        anomaly_score += self.analyze_temporal_anomalies(&fingerprint, ip_patterns, &mut indicators);
+        anomaly_score +=
+            self.analyze_temporal_anomalies(&fingerprint, ip_patterns, &mut indicators);
         anomaly_score += self.analyze_behavioral_anomalies(&fingerprint, &mut indicators);
 
         // Normalize score and determine risk level
@@ -240,7 +243,13 @@ impl RequestFingerprintAnalyzer {
             RiskLevel::Critical => RecommendedAction::SecurityAlert,
             RiskLevel::High => RecommendedAction::Block,
             RiskLevel::Medium => RecommendedAction::RequireAdditionalAuth,
-            RiskLevel::Low => if is_anomalous { RecommendedAction::Monitor } else { RecommendedAction::Allow },
+            RiskLevel::Low => {
+                if is_anomalous {
+                    RecommendedAction::Monitor
+                } else {
+                    RecommendedAction::Allow
+                }
+            }
         };
 
         if is_anomalous {
@@ -264,18 +273,23 @@ impl RequestFingerprintAnalyzer {
     /// Record a request fingerprint for pattern learning
     async fn record_request(&self, fingerprint: &RequestFingerprint) {
         let mut history = self.request_history.write().await;
-        let ip_history = history.entry(fingerprint.ip_address.clone()).or_insert_with(Vec::new);
+        let ip_history = history
+            .entry(fingerprint.ip_address.clone())
+            .or_insert_with(Vec::new);
 
         // Add to history
         ip_history.push(fingerprint.clone());
 
         // Maintain sliding window
-        let cutoff_time = fingerprint.timestamp.saturating_sub(self.config.analysis_window);
+        let cutoff_time = fingerprint
+            .timestamp
+            .saturating_sub(self.config.analysis_window);
         ip_history.retain(|req| req.timestamp >= cutoff_time);
 
         // Update patterns if we have enough data
         if ip_history.len() >= self.config.min_requests_for_pattern as usize {
-            self.update_patterns(&fingerprint.ip_address, ip_history).await;
+            self.update_patterns(&fingerprint.ip_address, ip_history)
+                .await;
         }
 
         // Cleanup old entries
@@ -291,7 +305,10 @@ impl RequestFingerprintAnalyzer {
 
         for req in history {
             let pattern_key = format!("{}-{}-{}", req.method, req.path, req.user_agent_hash);
-            pattern_groups.entry(pattern_key).or_insert_with(Vec::new).push(req);
+            pattern_groups
+                .entry(pattern_key)
+                .or_insert_with(Vec::new)
+                .push(req);
         }
 
         // Convert groups to patterns
@@ -368,10 +385,14 @@ impl RequestFingerprintAnalyzer {
                 // Calculate current frequency (very rough estimate)
                 let current_frequency = 60.0; // Assume 1 request per minute baseline
 
-                let frequency_deviation = (current_frequency - expected_frequency).abs() / expected_frequency.max(1.0);
+                let frequency_deviation =
+                    (current_frequency - expected_frequency).abs() / expected_frequency.max(1.0);
 
                 if frequency_deviation > 2.0 {
-                    indicators.push(format!("Unusual request frequency: {:.2}x normal", frequency_deviation));
+                    indicators.push(format!(
+                        "Unusual request frequency: {:.2}x normal",
+                        frequency_deviation
+                    ));
                     return frequency_deviation.min(0.3);
                 }
             } else {
@@ -465,7 +486,9 @@ impl RequestFingerprintAnalyzer {
         }
 
         // Check for suspicious request methods
-        if !["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].contains(&fingerprint.method.as_str()) {
+        if !["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+            .contains(&fingerprint.method.as_str())
+        {
             indicators.push(format!("Unusual HTTP method: {}", fingerprint.method));
             score += 0.2;
         }
@@ -483,22 +506,36 @@ impl RequestFingerprintAnalyzer {
 
     /// Check if two fingerprints represent the same pattern
     fn patterns_match(&self, fp1: &RequestFingerprint, fp2: &RequestFingerprint) -> bool {
-        fp1.method == fp2.method &&
-        fp1.path == fp2.path &&
-        fp1.user_agent_hash == fp2.user_agent_hash &&
-        fp1.content_type == fp2.content_type
+        fp1.method == fp2.method
+            && fp1.path == fp2.path
+            && fp1.user_agent_hash == fp2.user_agent_hash
+            && fp1.content_type == fp2.content_type
     }
 
     /// Check if a path looks suspicious
     fn is_suspicious_path(&self, path: &str) -> bool {
         let suspicious_patterns = [
-            "/.env", "/admin", "/wp-admin", "/phpmyadmin", "/xmlrpc.php",
-            "/.git", "/backup", "/config", "/debug", "/test",
-            "../", "..\\", "<script", "javascript:", "data:",
+            "/.env",
+            "/admin",
+            "/wp-admin",
+            "/phpmyadmin",
+            "/xmlrpc.php",
+            "/.git",
+            "/backup",
+            "/config",
+            "/debug",
+            "/test",
+            "../",
+            "..\\",
+            "<script",
+            "javascript:",
+            "data:",
         ];
 
         let lower_path = path.to_lowercase();
-        suspicious_patterns.iter().any(|&pattern| lower_path.contains(pattern))
+        suspicious_patterns
+            .iter()
+            .any(|&pattern| lower_path.contains(pattern))
     }
 
     /// Check if a user agent hash corresponds to suspicious patterns
@@ -541,7 +578,11 @@ impl RequestFingerprintAnalyzer {
             total_ips,
             total_patterns,
             total_requests,
-            avg_patterns_per_ip: if total_ips > 0 { total_patterns / total_ips } else { 0 },
+            avg_patterns_per_ip: if total_ips > 0 {
+                total_patterns / total_ips
+            } else {
+                0
+            },
         }
     }
 
@@ -566,7 +607,10 @@ impl RequestFingerprintAnalyzer {
         patterns.retain(|ip, _| history.contains_key(ip));
 
         let cleaned_ips = history.len();
-        debug!("Cleaned up old fingerprint data, {} IPs remaining", cleaned_ips);
+        debug!(
+            "Cleaned up old fingerprint data, {} IPs remaining",
+            cleaned_ips
+        );
     }
 }
 
@@ -647,7 +691,10 @@ mod tests {
         let result = analyzer.analyze_request(fingerprint).await;
 
         // Should detect suspicious path
-        assert!(result.indicators.iter().any(|i| i.contains("Suspicious request path")));
+        assert!(result
+            .indicators
+            .iter()
+            .any(|i| i.contains("Suspicious request path")));
     }
 
     #[tokio::test]

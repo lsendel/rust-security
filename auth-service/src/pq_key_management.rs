@@ -754,14 +754,14 @@ impl PQKeyManager {
                     // Check key lengths and basic structure
                     match key.security_level {
                         SecurityLevel::Level1 => Ok(public_key.len()
-                            == pqcrypto_dilithium::dilithium2::PUBLICKEYBYTES
-                            && private_key.len() == pqcrypto_dilithium::dilithium2::SECRETKEYBYTES),
+                            == pqcrypto_mldsa::mldsa44::PUBLICKEYBYTES
+                            && private_key.len() == pqcrypto_mldsa::mldsa44::SECRETKEYBYTES),
                         SecurityLevel::Level3 => Ok(public_key.len()
-                            == pqcrypto_dilithium::dilithium3::PUBLICKEYBYTES
-                            && private_key.len() == pqcrypto_dilithium::dilithium3::SECRETKEYBYTES),
+                            == pqcrypto_mldsa::mldsa65::PUBLICKEYBYTES
+                            && private_key.len() == pqcrypto_mldsa::mldsa65::SECRETKEYBYTES),
                         SecurityLevel::Level5 => Ok(public_key.len()
-                            == pqcrypto_dilithium::dilithium5::PUBLICKEYBYTES
-                            && private_key.len() == pqcrypto_dilithium::dilithium5::SECRETKEYBYTES),
+                            == pqcrypto_mldsa::mldsa87::PUBLICKEYBYTES
+                            && private_key.len() == pqcrypto_mldsa::mldsa87::SECRETKEYBYTES),
                     }
                 }
                 _ => Ok(true), // For other key types or when features are disabled

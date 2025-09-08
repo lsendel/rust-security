@@ -22,7 +22,8 @@ pub use crypto::*;
 #[cfg(feature = "postgres")]
 pub use database::*;
 pub use http::*;
-pub use monitoring::*;
+pub use crate::security::audit_logging::{SecurityAuditLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 pub use rate_limiting::*;
-pub use security::*;
+pub use crate::security::threat_detection::threat_adapter::ThreatDetectionAdapter;
+pub use crate::security::threat_detection::threat_response_orchestrator::ThreatResponseOrchestrator;
 pub use storage::*;

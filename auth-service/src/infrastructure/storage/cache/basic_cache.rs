@@ -92,7 +92,15 @@ impl Cache {
     pub async fn new(config: CacheConfig) -> Result<Self, CacheError> {
         #[cfg(feature = "redis-sessions")]
         let redis_client = if config.use_redis && config.redis_url.is_some() {
-            match Client::open(config.redis_url.as_ref().ok_or(CacheError::ConfigurationError("Redis URL not provided".to_string()))?.as_str()) {
+            match Client::open(
+                config
+                    .redis_url
+                    .as_ref()
+                    .ok_or(CacheError::ConfigurationError(
+                        "Redis URL not provided".to_string(),
+                    ))?
+                    .as_str(),
+            ) {
                 Ok(client) => {
                     // Test the connection
                     match client.get_multiplexed_async_connection().await {

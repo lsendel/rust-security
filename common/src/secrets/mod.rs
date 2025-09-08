@@ -1,5 +1,5 @@
 //! Secure secrets management module
-//! 
+//!
 //! Provides secure handling of secrets with support for:
 //! - Environment variables
 //! - HashiCorp Vault
@@ -7,8 +7,8 @@
 //! - Azure Key Vault
 //! - File-based secrets with encryption
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Secure secret container that auto-zeroes on drop
@@ -57,22 +57,22 @@ impl SecureSecret {
 pub enum SecretError {
     #[error("Secret not found: {0}")]
     NotFound(String),
-    
+
     #[error("Invalid secret format: {0}")]
     InvalidFormat(String),
-    
+
     #[error("Secret expired: {0}")]
     Expired(String),
-    
+
     #[error("Vault communication failed: {0}")]
     VaultError(String),
-    
+
     #[error("AWS Secrets Manager error: {0}")]
     AwsError(String),
-    
+
     #[error("Environment variable not found: {0}")]
     EnvVarNotFound(String),
-    
+
     #[error("Decryption failed: {0}")]
     DecryptionError(String),
 }
@@ -84,7 +84,7 @@ pub type SecretResult<T> = Result<T, SecretError>;
 pub enum SecretSource {
     /// Environment variable
     Environment { var_name: String },
-    
+
     /// HashiCorp Vault
     Vault {
         url: String,
@@ -92,7 +92,7 @@ pub enum SecretSource {
         mount_path: String,
         secret_path: String,
     },
-    
+
     /// AWS Secrets Manager
     AwsSecretsManager {
         region: String,
@@ -100,7 +100,7 @@ pub enum SecretSource {
         access_key_id: Option<String>,
         secret_access_key: Option<String>,
     },
-    
+
     /// File-based secret (encrypted)
     File {
         path: String,
@@ -113,19 +113,19 @@ pub enum SecretSource {
 pub trait SecretsProvider: Send + Sync {
     /// Get a secret by name
     async fn get_secret(&self, name: &str) -> SecretResult<SecureSecret>;
-    
+
     /// Set a secret
     async fn set_secret(&self, secret: SecureSecret) -> SecretResult<()>;
-    
+
     /// Delete a secret
     async fn delete_secret(&self, name: &str) -> SecretResult<()>;
-    
+
     /// List all secrets (names only)
     async fn list_secrets(&self) -> SecretResult<Vec<String>>;
-    
+
     /// Rotate a secret
     async fn rotate_secret(&self, name: &str) -> SecretResult<SecureSecret>;
-    
+
     /// Check if secrets provider is healthy
     async fn health_check(&self) -> SecretResult<()>;
 }
@@ -153,8 +153,7 @@ impl EnvSecretsProvider {
     pub fn validate_required(&self) -> SecretResult<()> {
         for var_name in &self.required_vars {
             let full_name = format!("{}_{}", self.prefix, var_name);
-            std::env::var(&full_name)
-                .map_err(|_| SecretError::EnvVarNotFound(full_name))?;
+            std::env::var(&full_name).map_err(|_| SecretError::EnvVarNotFound(full_name))?;
         }
         Ok(())
     }
@@ -174,18 +173,20 @@ impl SecretsProvider for EnvSecretsProvider {
 
         // Validate secret strength
         if value.len() < 32 {
-            return Err(SecretError::InvalidFormat(
-                format!("Secret {} is too short (minimum 32 characters)", name)
-            ));
+            return Err(SecretError::InvalidFormat(format!(
+                "Secret {} is too short (minimum 32 characters)",
+                name
+            )));
         }
 
         // Check for development patterns
         let dev_patterns = ["development", "test", "changeme", "INSECURE_DEV_SECRET"];
         for pattern in &dev_patterns {
             if value.contains(pattern) {
-                return Err(SecretError::InvalidFormat(
-                    format!("Secret {} contains development pattern: {}", name, pattern)
-                ));
+                return Err(SecretError::InvalidFormat(format!(
+                    "Secret {} contains development pattern: {}",
+                    name, pattern
+                )));
             }
         }
 
@@ -194,13 +195,13 @@ impl SecretsProvider for EnvSecretsProvider {
 
     async fn set_secret(&self, _secret: SecureSecret) -> SecretResult<()> {
         Err(SecretError::InvalidFormat(
-            "Cannot set environment variables at runtime".to_string()
+            "Cannot set environment variables at runtime".to_string(),
         ))
     }
 
     async fn delete_secret(&self, _name: &str) -> SecretResult<()> {
         Err(SecretError::InvalidFormat(
-            "Cannot delete environment variables at runtime".to_string()
+            "Cannot delete environment variables at runtime".to_string(),
         ))
     }
 
@@ -208,7 +209,8 @@ impl SecretsProvider for EnvSecretsProvider {
         let mut secrets = Vec::new();
         for (key, _) in std::env::vars() {
             if key.starts_with(&format!("{}_", self.prefix)) {
-                let secret_name = key.strip_prefix(&format!("{}_", self.prefix))
+                let secret_name = key
+                    .strip_prefix(&format!("{}_", self.prefix))
                     .unwrap_or(&key)
                     .to_string();
                 secrets.push(secret_name);
@@ -219,7 +221,7 @@ impl SecretsProvider for EnvSecretsProvider {
 
     async fn rotate_secret(&self, _name: &str) -> SecretResult<SecureSecret> {
         Err(SecretError::InvalidFormat(
-            "Cannot rotate environment variables automatically".to_string()
+            "Cannot rotate environment variables automatically".to_string(),
         ))
     }
 
@@ -255,7 +257,10 @@ impl SecretsManager {
     /// Set the default provider
     pub fn set_default_provider(&mut self, name: String) -> SecretResult<()> {
         if !self.providers.contains_key(&name) {
-            return Err(SecretError::NotFound(format!("Provider {} not found", name)));
+            return Err(SecretError::NotFound(format!(
+                "Provider {} not found",
+                name
+            )));
         }
         self.default_provider = name;
         Ok(())
@@ -271,9 +276,11 @@ impl SecretsManager {
         }
 
         // Get from provider
-        let provider = self.providers.get(&self.default_provider)
+        let provider = self
+            .providers
+            .get(&self.default_provider)
             .ok_or_else(|| SecretError::NotFound("Default provider not found".to_string()))?;
-        
+
         let secret = provider.get_secret(name).await?;
 
         // Cache the secret
@@ -283,9 +290,12 @@ impl SecretsManager {
     }
 
     /// Get multiple secrets efficiently
-    pub async fn get_secrets(&mut self, names: &[&str]) -> SecretResult<HashMap<String, SecureSecret>> {
+    pub async fn get_secrets(
+        &mut self,
+        names: &[&str],
+    ) -> SecretResult<HashMap<String, SecureSecret>> {
         let mut secrets = HashMap::new();
-        
+
         for name in names {
             match self.get_secret(name).await {
                 Ok(secret) => {
@@ -297,7 +307,7 @@ impl SecretsManager {
                 }
             }
         }
-        
+
         Ok(secrets)
     }
 
@@ -320,11 +330,11 @@ impl SecretsManager {
 impl Default for SecretsManager {
     fn default() -> Self {
         let mut manager = Self::new();
-        
+
         // Add default environment provider
         let env_provider = EnvSecretsProvider::new("AUTH".to_string());
         manager.add_provider("env".to_string(), Box::new(env_provider));
-        
+
         manager
     }
 }
@@ -332,10 +342,10 @@ impl Default for SecretsManager {
 /// Convenience function to create a secrets manager from environment
 pub async fn create_secrets_manager_from_env() -> SecretResult<SecretsManager> {
     let manager = SecretsManager::default();
-    
+
     // Health check the default provider
     manager.health_check().await?;
-    
+
     Ok(manager)
 }
 
@@ -346,50 +356,59 @@ mod tests {
 
     #[tokio::test]
     async fn test_env_secrets_provider() {
-        env::set_var("TEST_JWT_SECRET", "production_secure_jwt_key_32_chars_minimum_length");
-        
+        env::set_var(
+            "TEST_JWT_SECRET",
+            "production_secure_jwt_key_32_chars_minimum_length",
+        );
+
         let provider = EnvSecretsProvider::new("TEST".to_string());
         let secret = provider.get_secret("JWT_SECRET").await.unwrap();
-        
+
         assert_eq!(secret.name, "JWT_SECRET");
-        assert_eq!(secret.value, "production_secure_jwt_key_32_chars_minimum_length");
+        assert_eq!(
+            secret.value,
+            "production_secure_jwt_key_32_chars_minimum_length"
+        );
     }
 
     #[tokio::test]
     async fn test_env_provider_rejects_short_secrets() {
         env::set_var("TEST_SHORT_SECRET", "short");
-        
+
         let provider = EnvSecretsProvider::new("TEST".to_string());
         let result = provider.get_secret("SHORT_SECRET").await;
-        
+
         assert!(matches!(result, Err(SecretError::InvalidFormat(_))));
     }
 
     #[tokio::test]
     async fn test_env_provider_rejects_dev_patterns() {
         env::set_var("TEST_DEV_SECRET", "development_secret_32_characters_long");
-        
+
         let provider = EnvSecretsProvider::new("TEST".to_string());
         let result = provider.get_secret("DEV_SECRET").await;
-        
+
         assert!(matches!(result, Err(SecretError::InvalidFormat(_))));
     }
 
     #[tokio::test]
     async fn test_secrets_manager_caching() {
-        env::set_var("TEST_CACHED_SECRET", "cached_secret_32_characters_long_enough");
-        
+        env::set_var(
+            "TEST_CACHED_SECRET",
+            "cached_secret_32_characters_long_enough",
+        );
+
         let mut manager = SecretsManager::new();
         let provider = EnvSecretsProvider::new("TEST".to_string());
         manager.add_provider("test".to_string(), Box::new(provider));
         manager.set_default_provider("test".to_string()).unwrap();
-        
+
         // First call should hit provider
         let secret1 = manager.get_secret("CACHED_SECRET").await.unwrap();
-        
+
         // Second call should hit cache
         let secret2 = manager.get_secret("CACHED_SECRET").await.unwrap();
-        
+
         assert_eq!(secret1.value, secret2.value);
     }
 }

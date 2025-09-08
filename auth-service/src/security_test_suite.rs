@@ -6,9 +6,10 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::adaptive_rate_limiting::*;
-    use crate::auth_api::*;
-    use crate::jwt_blacklist::*;
+    use crate::application::auth::auth_api::*;
+    use crate::application::auth::jwt_blacklist::*;
+    use crate::domain::value_objects::password_hash::PasswordHash;
+    use crate::infrastructure::rate_limiting::adaptive_rate_limiting::*;
     use crate::pkce::*;
     use crate::request_fingerprinting::*;
     use axum::{
@@ -22,7 +23,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tokio::time::{sleep, timeout};
-    use crate::domain::value_objects::password_hash::PasswordHash;
 
     /// Helper function to create a test user
     fn create_test_user(id: &str, email: &str) -> User {
@@ -582,7 +582,7 @@ mod tests {
             let limiter = AdaptiveRateLimiter::new(config, fp_analyzer);
 
             // Test restrictive endpoint
-            let login_req = Request::builder()
+            let _login_req = Request::builder()
                 .method("POST")
                 .uri("/api/auth/login")
                 .header("user-agent", "test-agent")
@@ -591,7 +591,7 @@ mod tests {
                 .unwrap();
 
             // Test lenient endpoint
-            let general_req = Request::builder()
+            let _general_req = Request::builder()
                 .method("GET")
                 .uri("/api/general")
                 .header("user-agent", "test-agent")
@@ -609,7 +609,7 @@ mod tests {
                     .header("x-forwarded-for", "192.168.1.1")
                     .body(Body::empty())
                     .unwrap();
-                
+
                 if matches!(
                     limiter.check_rate_limit(login_req_clone).await,
                     RateLimitDecision::Allow
@@ -628,7 +628,7 @@ mod tests {
                     .header("x-forwarded-for", "192.168.1.1")
                     .body(Body::empty())
                     .unwrap();
-                
+
                 if matches!(
                     limiter.check_rate_limit(general_req_clone).await,
                     RateLimitDecision::Allow
@@ -658,7 +658,7 @@ mod tests {
             let limiter = AdaptiveRateLimiter::new(config, fp_analyzer);
 
             // Create a suspicious request
-            let suspicious_req = Request::builder()
+            let _suspicious_req = Request::builder()
                 .method("GET")
                 .uri("/.env") // Suspicious path
                 .header("x-forwarded-for", "192.168.1.100")
@@ -683,7 +683,7 @@ mod tests {
                     .header("x-forwarded-for", "192.168.1.100")
                     .body(Body::empty())
                     .unwrap();
-                
+
                 match limiter.check_rate_limit(suspicious_req_clone).await {
                     RateLimitDecision::Allow => {}
                     RateLimitDecision::RateLimit { .. } | RateLimitDecision::Block { .. } => {
@@ -870,7 +870,7 @@ mod tests {
                     .body(Body::empty())
                     .unwrap();
 
-                        let decision = rate_limiter.check_rate_limit(req).await;
+                let decision = rate_limiter.check_rate_limit(req).await;
                 responses.push((i, path, decision));
 
                 // Small delay between requests
@@ -988,10 +988,9 @@ mod tests {
                         "x-forwarded-for",
                         format!("192.168.{}.{}", i / 256, i % 256),
                     )
-                    .body(axum::body::Body::from("")).unwrap();
-                let handle = tokio::spawn(async move {
-                    limiter.check_rate_limit(req).await
-                });
+                    .body(axum::body::Body::from(""))
+                    .unwrap();
+                let handle = tokio::spawn(async move { limiter.check_rate_limit(req).await });
                 handles.push(handle);
             }
 

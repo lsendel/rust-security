@@ -498,7 +498,7 @@ impl MLThreatEngine {
     ) -> HashMap<String, f64> {
         let mut importance_scores = HashMap::new();
 
-        for (feature_name, original_value) in features {
+        for (feature_name, _original_value) in features {
             // Create modified feature vector with this feature permuted
             let mut modified_features = features.clone();
             modified_features.insert(feature_name.clone(), 0.0); // Zero out the feature

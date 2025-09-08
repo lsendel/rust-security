@@ -10,10 +10,10 @@
 //! - **Secure Defaults**: Hardened defaults based on security best practices
 
 pub mod config;
-pub mod defaults; 
-pub mod validation;
+pub mod defaults;
 pub mod hardening;
 pub mod monitoring;
+pub mod validation;
 
 pub use config::*;
 pub use defaults::*;
@@ -242,8 +242,8 @@ pub struct RateLimitingConfig {
 pub struct SecurityHeaders {
     /// HSTS max age (minimum 1 year for production)
     #[validate(range(
-        min = 31536000,
-        max = 63072000,
+        min = 31_536_000,
+        max = 63_072_000,
         message = "HSTS max age should be at least 1 year"
     ))]
     pub hsts_max_age_seconds: u32,
@@ -320,7 +320,7 @@ pub struct Argon2Config {
     /// Memory cost (KB)
     #[validate(range(
         min = 32768,
-        max = 1048576,
+        max = 1_048_576,
         message = "Argon2 memory cost must be between 32MB and 1GB"
     ))]
     pub memory_cost: u32,
@@ -685,9 +685,15 @@ mod tests {
     fn test_development_config() {
         // Set required environment variables for development config
         std::env::set_var("JWT_SECRET", "secure_jwt_secret_key_32_chars_minimum");
-        std::env::set_var("REQUEST_SIGNING_SECRET", "development-request-signing-secret-32-chars");
-        std::env::set_var("ENCRYPTION_KEY", "development-encryption-key-32-chars-minimum");
-        
+        std::env::set_var(
+            "REQUEST_SIGNING_SECRET",
+            "development-request-signing-secret-32-chars",
+        );
+        std::env::set_var(
+            "ENCRYPTION_KEY",
+            "development-encryption-key-32-chars-minimum",
+        );
+
         let config = UnifiedSecurityConfig::development();
 
         assert_eq!(config.jwt.secret, "secure_jwt_secret_key_32_chars_minimum");

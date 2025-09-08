@@ -500,11 +500,12 @@ impl AdvancedBehavioralThreatDetector {
         let start_time = SystemTime::now();
         let mut threats_detected = Vec::new();
 
+        // TODO: Re-enable when flume channels are available
         // Send event to processing queue
-        if let Err(e) = self.event_sender.send(event.clone()) {
-            error!("Failed to queue event for processing: {}", e);
-            return Ok(threats_detected);
-        }
+        // if let Err(e) = self.event_sender.send(event.clone()) {
+        //     error!("Failed to queue event for processing: {}", e);
+        //     return Ok(threats_detected);
+        // }
 
         // Immediate threat detection
         threats_detected.extend(self.detect_credential_stuffing(&event).await?);
@@ -1032,81 +1033,83 @@ impl AdvancedBehavioralThreatDetector {
 
     /// Start event processing background task
     fn start_event_processor(&self) {
-        let event_receiver = self.event_receiver.clone();
-        let event_buffer = self.event_buffer.clone();
-        let user_profiles = self.user_profiles.clone();
-        let user_session_tracking = self.user_session_tracking.clone();
-        let config = self.config.clone();
+        // TODO: Re-enable when flume channels are available
+        // let event_receiver = self.event_receiver.clone();
+        let _event_buffer = self.event_buffer.clone();
+        let _user_profiles = self.user_profiles.clone();
+        let _user_session_tracking = self.user_session_tracking.clone();
+        let _config = self.config.clone();
 
         tokio::spawn(async move {
             info!("Starting event processor task");
 
-            while let Ok(event) = event_receiver.recv_async().await {
-                // Add to event buffer
-                {
-                    let mut buffer = event_buffer.lock().await;
-                    let config_guard = config.read().await;
+            // TODO: Uncomment when event_receiver is implemented
+            // while let Ok(event) = event_receiver.recv_async().await {
+            //     // Add to event buffer
+            //     {
+            //         let mut buffer = event_buffer.lock().await;
+            //         let config_guard = config.read().await;
 
-                    buffer.push_back(event.clone());
-                    if buffer.len() > config_guard.event_buffer_size {
-                        buffer.pop_front();
-                    }
-                }
+            //         buffer.push_back(event.clone());
+            //         if buffer.len() > config_guard.event_buffer_size {
+            //             buffer.pop_front();
+            //         }
+            //         }
 
-                // Update user profile
-                if let Some(user_id) = &event.user_id {
-                    let mut profiles = user_profiles.write().await;
-                    let profile = profiles
-                        .entry(user_id.clone())
-                        .or_insert_with(|| UserBehaviorProfile::new(user_id.clone()));
+            //         // Update user profile
+            //         if let Some(user_id) = &event.user_id {
+            //             let mut profiles = user_profiles.write().await;
+            //             let profile = profiles
+            //                 .entry(user_id.clone())
+            //                 .or_insert_with(|| UserBehaviorProfile::new(user_id.clone()));
 
-                    let threat_event = crate::threat_types::ThreatSecurityEvent::from(&event);
-                    profile.update_with_event(&threat_event);
-                    #[cfg(feature = "metrics")]
-                    USER_PROFILES_UPDATED.inc();
-                }
+            //             let threat_event = crate::security::threat_types::ThreatSecurityEvent::from(&event);
+            //             profile.update_with_event(&threat_event);
+            //             #[cfg(feature = "metrics")]
+            //             USER_PROFILES_UPDATED.inc();
+            //         }
 
-                // Update session tracking
-                if let (Some(user_id), Some(session_id)) = (&event.user_id, &event.session_id) {
-                    let mut session_tracking = user_session_tracking.write().await;
-                    let user_sessions = session_tracking
-                        .entry(user_id.clone())
-                        .or_insert_with(Vec::new);
+            //         // Update session tracking
+            //         if let (Some(user_id), Some(session_id)) = (&event.user_id, &event.session_id) {
+            //             let mut session_tracking = user_session_tracking.write().await;
+            //             let user_sessions = session_tracking
+            //                 .entry(user_id.clone())
+            //                 .or_insert_with(Vec::new);
 
-                    // Find existing session or create new one
-                    if let Some(session) = user_sessions
-                        .iter_mut()
-                        .find(|s| s.session_id == *session_id)
-                    {
-                        session.last_activity = event.timestamp;
-                        session.events_count += 1;
-                    } else {
-                        let new_session = SessionInfo {
-                            session_id: session_id.clone(),
-                            start_time: event.timestamp,
-                            last_activity: event.timestamp,
-                            ip_address: event.ip_address,
-                            location: event.location.as_ref().map(|loc| GeoLocation {
-                                country: loc.clone(),
-                                region: None,
-                                city: None,
-                                latitude: None,
-                                longitude: None,
-                                asn: None,
-                                isp: None,
-                            }),
-                            device_fingerprint: event.device_fingerprint.clone(),
-                            events_count: 1,
-                            risk_indicators: Vec::new(),
-                        };
-                        user_sessions.push(new_session);
-                    }
+            //             // Find existing session or create new one
+            //             if let Some(session) = user_sessions
+            //                 .iter_mut()
+            //                 .find(|s| s.session_id == *session_id)
+            //             {
+            //                 session.last_activity = event.timestamp;
+            //                 session.events_count += 1;
+            //             } else {
+            //                 let new_session = SessionInfo {
+            //                     session_id: session_id.clone(),
+            //                     start_time: event.timestamp,
+            //                     last_activity: event.timestamp,
+            //                     ip_address: event.ip_address,
+            //                     location: event.location.as_ref().map(|loc| GeoLocation {
+            //                         country: loc.clone(),
+            //                         region: None,
+            //                         city: None,
+            //                         latitude: None,
+            //                         longitude: None,
+            //                         asn: None,
+            //                         isp: None,
+            //                     }),
+            //                     device_fingerprint: event.device_fingerprint.clone(),
+            //                     events_count: 1,
+            //                     risk_indicators: Vec::new(),
+            //                 };
+            //                 user_sessions.push(new_session);
+            //             }
 
-                    // Clean up old sessions (older than 24 hours)
-                    let cutoff = Utc::now() - Duration::hours(24);
-                    user_sessions.retain(|s| s.last_activity > cutoff);
-                }
-            }
+            //             // Clean up old sessions (older than 24 hours)
+            //             let cutoff = Utc::now() - Duration::hours(24);
+            //             user_sessions.retain(|s| s.last_activity > cutoff);
+            //         }
+            //     }
         });
     }
 

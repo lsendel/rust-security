@@ -55,18 +55,18 @@ mod tests {
     async fn test_auth_service_integration() {
         let threat_processor = Arc::new(ThreatProcessor::new(
             Arc::new(
-                crate::threat_behavioral_analyzer::AdvancedBehavioralThreatDetector::new(
-                    crate::threat_behavioral_analyzer::BehavioralAnalysisConfig::default(),
+                crate::security::threat_behavioral_analyzer::AdvancedBehavioralThreatDetector::new(
+                    crate::security::threat_behavioral_analyzer::BehavioralAnalysisConfig::default(),
                 ),
             ),
             Arc::new(
-                crate::threat_intelligence::ThreatIntelligenceCorrelator::new(
-                    crate::threat_intelligence::ThreatIntelligenceConfig::default(),
+                crate::security::threat_detection::threat_hunting_orchestrator::ThreatHuntingOrchestrator::new(
+                    crate::security::threat_detection::threat_hunting_orchestrator::ThreatIntelligenceConfig::default(),
                 ),
             ),
             Arc::new(
-                crate::threat_response_orchestrator::ThreatResponseOrchestrator::new(
-                    crate::threat_response_orchestrator::ThreatResponseConfig::default(),
+                crate::security::threat_response_orchestrator::ThreatResponseOrchestrator::new(
+                    crate::security::threat_response_orchestrator::ThreatResponseConfig::default(),
                 ),
             ),
         ));

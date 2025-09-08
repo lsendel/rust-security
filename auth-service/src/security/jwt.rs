@@ -633,7 +633,9 @@ pub async fn initialize_global_jwt_manager(
         Ok(lock) => lock,
         Err(_) => {
             error!("GLOBAL_JWT_MANAGER mutex is poisoned");
-            return Err(JwtError::KeyGenerationFailed("JWT service mutex poisoned".to_string()));
+            return Err(JwtError::KeyGenerationFailed(
+                "JWT service mutex poisoned".to_string(),
+            ));
         }
     };
     *global = Some(Arc::new(manager));
@@ -643,7 +645,10 @@ pub async fn initialize_global_jwt_manager(
 
 /// Get global JWT manager
 pub fn get_global_jwt_manager() -> Option<Arc<UnifiedJwtManager>> {
-    GLOBAL_JWT_MANAGER.read().ok().and_then(|guard| guard.clone())
+    GLOBAL_JWT_MANAGER
+        .read()
+        .ok()
+        .and_then(|guard| guard.clone())
 }
 
 /// Convenience functions using global manager

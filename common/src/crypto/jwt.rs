@@ -389,7 +389,6 @@ impl JwtOperations {
                 }
                 Err(e) => {
                     last_error = Some(e);
-                    continue;
                 }
             }
         }

@@ -47,7 +47,9 @@ impl AppBuilder {
     #[must_use]
     pub fn build(self) -> AuthService {
         let config = self.config.expect("Configuration must be provided");
-        let auth_state = self.auth_state.expect("Authentication state must be provided");
+        let auth_state = self
+            .auth_state
+            .expect("Authentication state must be provided");
 
         AuthService { config, auth_state }
     }

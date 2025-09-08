@@ -17,12 +17,12 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    jit_token_manager::{JitTokenManager, TokenResponse},
-    infrastructure::monitoring::non_human_monitoring::{NonHumanIdentityMonitor, NonHumanMetrics},
     application::api::service_identity::{
         Environment, IdentityConfig, IdentityType, JitAccessRequest, RequestContext,
         ServiceIdentity, ServiceIdentityManager,
     },
+    infrastructure::monitoring::non_human_monitoring::{NonHumanIdentityMonitor, NonHumanMetrics},
+    jit_token_manager::{JitTokenManager, TokenResponse},
 };
 
 /// Register a new service identity

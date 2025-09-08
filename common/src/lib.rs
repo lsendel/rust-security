@@ -24,7 +24,6 @@
 pub mod config;
 pub mod constants;
 pub mod crypto;
-pub mod secrets;
 pub mod crypto_utils;
 pub mod database;
 pub mod errors;
@@ -32,6 +31,7 @@ pub mod errors;
 pub mod mocks;
 pub mod optimized_pools;
 pub mod redis_config;
+pub mod secrets;
 pub mod secure_logging;
 pub mod security;
 pub mod sharded_rate_limiter;

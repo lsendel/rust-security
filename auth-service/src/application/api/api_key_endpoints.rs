@@ -1,6 +1,6 @@
 use crate::application::api::api_key_store::{ApiKey, ApiKeyDetails};
-use crate::shared::error::AppError;
 use crate::application::state::AppState;
+use crate::shared::error::AppError;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
 use axum::{extract::State, routing::post, Json, Router};

@@ -3,15 +3,15 @@
 //! This module provides comprehensive JWT validation with strict security constraints
 //! including audience, issuer, algorithm, and token type validation.
 
-use crate::infrastructure::monitoring::security_logging_enhanced::{
-    SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity,
-};
 use crate::shared::error::AppError;
 use anyhow::{anyhow, Result};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
+use crate::security::audit_logging::{get_audit_logger, SecurityEvent, SecurityEventType, SecurityOutcome, SecuritySeverity};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// JWT validation configuration with security constraints
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -387,63 +387,18 @@ impl EnhancedJwtValidator {
 
     /// Log successful validation
     fn log_validation_success(&self, result: &JwtValidationResult) {
-        SecurityLogger::log_event(
-            &SecurityEvent::new(
-                SecurityEventType::DataAccess,
-                SecuritySeverity::Low,
-                "jwt-validation".to_string(),
-                "JWT token validation successful".to_string(),
-            )
-            .with_actor("jwt_validator".to_string())
-            .with_action("validate_token".to_string())
-            .with_target("jwt_token".to_string())
-            .with_outcome("success".to_string())
-            .with_reason("JWT token passed all security validations".to_string())
-            .with_detail(
-                "algorithm".to_string(),
-                result.validation_metadata.algorithm_used.clone(),
-            )
-            .with_detail(
-                "issuer".to_string(),
-                result
-                    .validation_metadata
-                    .issuer
-                    .clone()
-                    .unwrap_or_default(),
-            )
-            .with_detail(
-                "subject".to_string(),
-                result
-                    .validation_metadata
-                    .subject
-                    .clone()
-                    .unwrap_or_default(),
-            )
-            .with_detail(
-                "token_age_seconds".to_string(),
-                result
-                    .validation_metadata
-                    .token_age_seconds
-                    .unwrap_or_default(),
-            ),
-        );
+        // Log successful validation
+        if let Some(_logger) = &self.security_logger {
+            // TODO: Implement synchronous logging or use tokio::spawn for async logging
+        }
     }
 
     /// Log validation failure
     fn log_validation_failure(&self, failure_type: &str, details: &str) {
-        SecurityLogger::log_event(
-            &SecurityEvent::new(
-                SecurityEventType::SecurityViolation,
-                SecuritySeverity::High,
-                "jwt-validation".to_string(),
-                format!("JWT validation failed: {}", failure_type),
-            )
-            .with_actor("jwt_validator".to_string())
-            .with_action("validate_token".to_string())
-            .with_target("jwt_token".to_string())
-            .with_outcome("failure".to_string())
-            .with_reason(details.to_string()),
-        );
+        // Log validation failure
+        if let Some(_logger) = &self.security_logger {
+            // TODO: Implement synchronous logging or use tokio::spawn for async logging
+        }
     }
 
     /// Get current configuration

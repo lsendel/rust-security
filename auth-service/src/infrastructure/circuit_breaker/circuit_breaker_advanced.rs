@@ -548,6 +548,7 @@ mod tests {
 
         // Successful call should work
         let result = breaker.call(|| async { Ok::<i32, String>(42) }).await;
+        let operation_result = breaker.call(|| Ok(42)).await;
         assert!(operation_result.is_ok());
         assert_eq!(operation_result.unwrap(), 42);
 
@@ -564,13 +565,13 @@ mod tests {
         let breaker = AdvancedCircuitBreaker::new("test".to_string(), config);
 
         // First failure
-        let result = breaker
+        let operation_result = breaker
             .call(|| async { Err::<i32, String>("error".to_string()) })
             .await;
         assert!(operation_result.is_err());
 
         // Second failure should open the circuit
-        let result = breaker
+        let operation_result = breaker
             .call(|| async { Err::<i32, String>("error".to_string()) })
             .await;
         assert!(operation_result.is_err());
@@ -600,7 +601,7 @@ mod tests {
         sleep(Duration::from_millis(150)).await;
 
         // Next call should transition to half-open
-        let result = breaker.call(|| async { Ok::<i32, String>(42) }).await;
+        let operation_result = breaker.call(|| async { Ok::<i32, String>(42) }).await;
         assert!(operation_result.is_ok());
 
         let metrics = breaker.get_metrics().await;
@@ -615,7 +616,7 @@ mod tests {
         let breaker = registry.register("test-service".to_string(), config).await;
 
         // Test successful call
-        let result = breaker
+        let operation_result = breaker
             .call(|| async { Ok::<String, String>("success".to_string()) })
             .await;
         assert!(operation_result.is_ok());
@@ -638,7 +639,7 @@ mod tests {
         let breaker = AdvancedCircuitBreaker::new("test".to_string(), config);
 
         // Slow but successful call
-        let result = breaker
+        let operation_result = breaker
             .call(|| async {
                 sleep(Duration::from_millis(100)).await;
                 Ok::<i32, String>(42)

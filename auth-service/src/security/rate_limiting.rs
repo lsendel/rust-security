@@ -138,11 +138,12 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use log::error;
 use base64::{engine::general_purpose, Engine as _};
 use dashmap::DashMap;
-// Redis support temporarily disabled for build compatibility
-// use deadpool_redis::Pool as RedisPool;
+use ipnetwork::IpNetwork;
+use log::error;
+#[cfg(feature = "redis-rate-limiting")]
+use deadpool_redis::Pool as RedisPool;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -152,6 +153,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
+
+// Import audit logging for security events
+use crate::security::audit_logging::{get_audit_logger, SecurityOutcome};
 
 /// Comprehensive rate limiting configuration
 ///
@@ -518,7 +522,7 @@ pub struct RateLimitWindow {
 
 impl RateLimitWindow {
     fn new(burst_capacity: u32) -> Self {
-          let now = SystemTime::now()
+        let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
@@ -537,7 +541,7 @@ impl RateLimitWindow {
     }
 
     fn check_and_update(&self, config: &RateLimitConfig, window_duration: u64) -> RateLimitResult {
-          let now = SystemTime::now()
+        let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
@@ -725,8 +729,9 @@ pub struct UnifiedRateLimiter {
     // Adaptive rate limiting
     adaptive_limiter: Arc<RwLock<AdaptiveLimiter>>,
 
-    // NOTE: Redis support available but requires feature flag 'redis' to be enabled
-    // This ensures clean builds without Redis dependencies when not needed
+    // Distributed Redis backend
+    #[cfg(feature = "redis-rate-limiting")]
+    redis_client: Option<RedisPool>,
 
     // Cleanup tracking
     last_cleanup: Arc<RwLock<Instant>>,
@@ -738,11 +743,34 @@ impl UnifiedRateLimiter {
         let shard_count = std::cmp::max(num_cpus::get(), 4);
         let ip_shards = (0..shard_count).map(|_| DashMap::new()).collect();
 
-        // Redis distributed rate limiting available with feature flag
+        // Initialize Redis client for distributed rate limiting
+        #[cfg(feature = "redis-rate-limiting")]
+        let redis_client = if config.enable_distributed_limiting {
+            if let Some(redis_url) = redis_url {
+                match create_redis_pool(&redis_url) {
+                    Ok(pool) => {
+                        info!("Redis distributed rate limiting enabled: {}", redis_url);
+                        Some(pool)
+                    }
+                    Err(e) => {
+                        warn!("Failed to create Redis pool: {}. Falling back to local rate limiting", e);
+                        None
+                    }
+                }
+            } else {
+                warn!("Distributed rate limiting requested but no Redis URL provided");
+                None
+            }
+        } else {
+            None
+        };
+
+        #[cfg(not(feature = "redis-rate-limiting"))]
+        let _ = redis_url; // Ignore Redis URL when feature is disabled
+        #[cfg(not(feature = "redis-rate-limiting"))]
         if config.enable_distributed_limiting {
-            info!("Distributed rate limiting requested. Enable 'redis' feature flag for Redis backend");
+            warn!("Distributed rate limiting requested but 'redis-rate-limiting' feature not enabled");
         }
-        let _ = redis_url; // Redis URL available when feature is enabled
 
         Self {
             config: config.clone(),
@@ -759,7 +787,8 @@ impl UnifiedRateLimiter {
             adaptive_limiter: Arc::new(RwLock::new(AdaptiveLimiter::new(f64::from(
                 config.global_requests_per_minute,
             )))),
-            // redis_client, // Temporarily disabled
+            #[cfg(feature = "redis-rate-limiting")]
+            redis_client,
             last_cleanup: Arc::new(RwLock::new(Instant::now())),
         }
     }
@@ -822,7 +851,63 @@ impl UnifiedRateLimiter {
             };
         }
 
-        // Check global rate limits
+        // Check distributed rate limits first if enabled
+        #[cfg(feature = "redis-rate-limiting")]
+        if self.config.enable_distributed_limiting {
+            // Global distributed limits
+            let global_key = format!("rl:global:minute");
+            if let Some(result) = self.check_distributed_rate_limit(
+                &global_key,
+                self.config.global_requests_per_minute,
+                60
+            ).await {
+                if matches!(result, RateLimitResult::Blocked { .. }) {
+                    return result;
+                }
+            }
+
+            // Per-IP distributed limits  
+            let ip_key = format!("rl:ip:{}:minute", ip);
+            if let Some(result) = self.check_distributed_rate_limit(
+                &ip_key,
+                self.config.per_ip_requests_per_minute,
+                60
+            ).await {
+                if matches!(result, RateLimitResult::Blocked { .. }) {
+                    return result;
+                }
+            }
+
+            // Per-client distributed limits
+            if let Some(client_id) = client_id {
+                let client_key = format!("rl:client:{}:minute", client_id);
+                if let Some(result) = self.check_distributed_rate_limit(
+                    &client_key,
+                    self.config.per_client_requests_per_minute,
+                    60
+                ).await {
+                    if matches!(result, RateLimitResult::Blocked { .. }) {
+                        return result;
+                    }
+                }
+            }
+
+            // Endpoint-specific distributed limits
+            if let Some(limit) = self.get_endpoint_limit(endpoint) {
+                let endpoint_key = format!("rl:endpoint:{}:minute", endpoint.replace("/", "_"));
+                if let Some(result) = self.check_distributed_rate_limit(
+                    &endpoint_key,
+                    limit,
+                    60
+                ).await {
+                    if matches!(result, RateLimitResult::Blocked { .. }) {
+                        return result;
+                    }
+                }
+            }
+        }
+
+        // Check global rate limits (fallback to local)
         if let Some(result) = self.check_global_limits().await {
             return result;
         }
@@ -864,6 +949,19 @@ impl UnifiedRateLimiter {
 
         let minute_count = self.global_minute_counter.load(Ordering::Relaxed);
         if minute_count >= u64::from(self.config.global_requests_per_minute) {
+            // Log rate limit violation
+            if let Some(audit_logger) = get_audit_logger() {
+                let limit = self.config.global_requests_per_minute;
+                tokio::spawn(async move {
+                    audit_logger.log_rate_limit_violation(
+                        "127.0.0.1".parse().unwrap(),
+                        "global_requests_per_minute".to_string(),
+                        minute_count as u32,
+                        limit,
+                    ).await;
+                });
+            }
+
             return Some(RateLimitResult::Blocked {
                 reason: "Global minute limit exceeded".to_string(),
                 retry_after: Duration::from_secs(60),
@@ -1036,13 +1134,15 @@ impl UnifiedRateLimiter {
                 .any(|cidr| self.ip_in_cidr(ip, cidr))
     }
 
-    const fn ip_in_cidr(&self, ip: &IpAddr, cidr: &str) -> bool {
-        // Simple CIDR matching - in production, use a proper CIDR library
-        // Simple CIDR matching - for production, use a proper CIDR library
-        // For now, just return false as a safe fallback
-        let _ = cidr;
-        let _ = ip;
-        false
+    fn ip_in_cidr(&self, ip: &IpAddr, cidr: &str) -> bool {
+        // Proper CIDR matching using ipnetwork crate
+        match cidr.parse::<ipnetwork::IpNetwork>() {
+            Ok(network) => network.contains(*ip),
+            Err(_) => {
+                warn!("Invalid CIDR notation: {}", cidr);
+                false // Safe fallback for invalid CIDR strings
+            }
+        }
     }
 
     async fn cleanup_if_needed(&self) {
@@ -1087,7 +1187,11 @@ impl UnifiedRateLimiter {
                     let total_requests = window.total_requests.load(Ordering::Relaxed);
 
                     // Consider entry stale if no activity in last 2 hours or very low request count
-                    if system_now.duration_since(UNIX_EPOCH).unwrap_or_else(|_| std::time::Duration::from_secs(0)).as_secs() - last_activity
+                    if system_now
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                        .as_secs()
+                        - last_activity
                         > 7200
                         || total_requests < 5
                     {
@@ -1122,7 +1226,12 @@ impl UnifiedRateLimiter {
             let last_activity = window.window_start.load(Ordering::Relaxed);
             let total_requests = window.total_requests.load(Ordering::Relaxed);
 
-            if system_now.duration_since(UNIX_EPOCH).unwrap_or_else(|_| std::time::Duration::from_secs(0)).as_secs() - last_activity > 3600
+            if system_now
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                .as_secs()
+                - last_activity
+                > 3600
                 || total_requests == 0
             {
                 client_keys_to_remove.push(entry.key().clone());
@@ -1140,7 +1249,12 @@ impl UnifiedRateLimiter {
             let last_activity = window.window_start.load(Ordering::Relaxed);
             let total_requests = window.total_requests.load(Ordering::Relaxed);
 
-            if system_now.duration_since(UNIX_EPOCH).unwrap_or_else(|_| std::time::Duration::from_secs(0)).as_secs() - last_activity > 3600
+            if system_now
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+                .as_secs()
+                - last_activity
+                > 3600
                 || total_requests == 0
             {
                 endpoint_keys_to_remove.push(entry.key().clone());
@@ -1330,10 +1444,14 @@ pub async fn unified_rate_limit_middleware(
             let mut resp = (StatusCode::TOO_MANY_REQUESTS, response).into_response();
             resp.headers_mut().insert(
                 "Retry-After",
-                retry_after.as_secs().to_string().parse().unwrap_or_else(|_| {
-                    error!("Failed to parse retry_after duration as header value");
-                    axum::http::HeaderValue::from_static("60")
-                }),
+                retry_after
+                    .as_secs()
+                    .to_string()
+                    .parse()
+                    .unwrap_or_else(|_| {
+                        error!("Failed to parse retry_after duration as header value");
+                        axum::http::HeaderValue::from_static("60")
+                    }),
             );
             if let Ok(limit_str) = limiter
                 .config
@@ -1364,13 +1482,107 @@ pub async fn unified_rate_limit_middleware(
             });
 
             let mut resp = (StatusCode::FORBIDDEN, response).into_response();
-            resp.headers_mut()
-                .insert("Retry-After", retry_after.to_string().parse().unwrap_or_else(|_| {
+            resp.headers_mut().insert(
+                "Retry-After",
+                retry_after.to_string().parse().unwrap_or_else(|_| {
                     error!("Failed to parse retry_after duration as header value");
                     axum::http::HeaderValue::from_static("60")
-                }));
+                }),
+            );
 
             Err(resp)
+        }
+    }
+}
+
+/// Create Redis connection pool for distributed rate limiting
+#[cfg(feature = "redis-rate-limiting")]
+fn create_redis_pool(redis_url: &str) -> Result<RedisPool, deadpool_redis::CreatePoolError> {
+    let config = deadpool_redis::Config::from_url(redis_url);
+    config.create_pool(Some(deadpool_redis::Runtime::Tokio1))
+}
+
+/// Distributed rate limit check using Redis
+#[cfg(feature = "redis-rate-limiting")]
+impl UnifiedRateLimiter {
+    /// Check rate limit using Redis backend
+    async fn check_distributed_rate_limit(
+        &self,
+        key: &str,
+        limit: u32,
+        window_secs: u64,
+    ) -> Option<RateLimitResult> {
+        if let Some(ref redis_pool) = self.redis_client {
+            match self.redis_rate_limit_check(redis_pool, key, limit, window_secs).await {
+                Ok(result) => Some(result),
+                Err(e) => {
+                    warn!("Redis rate limit check failed: {}. Falling back to local", e);
+                    None // Fall back to local rate limiting
+                }
+            }
+        } else {
+            None // No Redis client available
+        }
+    }
+
+    /// Perform rate limit check using Redis sliding window
+    async fn redis_rate_limit_check(
+        &self,
+        redis_pool: &RedisPool,
+        key: &str,
+        limit: u32,
+        window_secs: u64,
+    ) -> Result<RateLimitResult, Box<dyn std::error::Error + Send + Sync>> {        
+        let mut conn = redis_pool.get().await?;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_secs();
+        
+        let window_start = now - window_secs;
+        
+        // Redis Lua script for atomic sliding window rate limiting
+        let lua_script = r#"
+            local key = KEYS[1]
+            local window_start = tonumber(ARGV[1])
+            local now = tonumber(ARGV[2])
+            local limit = tonumber(ARGV[3])
+            
+            -- Remove old entries outside the window
+            redis.call('ZREMRANGEBYSCORE', key, '-inf', window_start)
+            
+            -- Count current entries in the window
+            local current = redis.call('ZCARD', key)
+            
+            if current < limit then
+                -- Add new entry with current timestamp as score and value
+                redis.call('ZADD', key, now, now)
+                -- Set expiration for cleanup
+                redis.call('EXPIRE', key, ARGV[4])
+                return {1, limit - current - 1}
+            else
+                return {0, 0}
+            end
+        "#;
+        
+        // Use deadpool-redis connection directly
+        let result: Vec<i32> = redis::cmd("EVAL")
+            .arg(lua_script)
+            .arg(1) // Number of keys
+            .arg(key)
+            .arg(window_start)
+            .arg(now)
+            .arg(limit)
+            .arg(window_secs + 60) // Expiration buffer
+            .query_async(conn.as_mut())
+            .await?;
+            
+        if result[0] == 1 {
+            Ok(RateLimitResult::Allowed)
+        } else {
+            Ok(RateLimitResult::Blocked {
+                reason: "Distributed rate limit exceeded".to_string(),
+                retry_after: Duration::from_secs(window_secs),
+            })
         }
     }
 }
@@ -1520,6 +1732,194 @@ mod tests {
         {
             RateLimitResult::Blocked { .. } => {}
             _ => panic!("Non-allowlisted IP should be rate limited"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cidr_ip_matching() {
+        let config = RateLimitConfig::default();
+        let limiter = UnifiedRateLimiter::new(config, None);
+
+        // Test IPv4 CIDR matching
+        let test_cases = vec![
+            // (ip, cidr, expected_match)
+            ("192.168.1.1", "192.168.1.0/24", true),
+            ("192.168.1.255", "192.168.1.0/24", true),
+            ("192.168.2.1", "192.168.1.0/24", false),
+            ("10.0.0.1", "10.0.0.0/8", true),
+            ("11.0.0.1", "10.0.0.0/8", false),
+            ("172.16.0.1", "172.16.0.0/12", true),
+            ("172.32.0.1", "172.16.0.0/12", false),
+            ("127.0.0.1", "127.0.0.1/32", true),
+            ("127.0.0.2", "127.0.0.1/32", false),
+        ];
+
+        for (ip_str, cidr, expected) in test_cases {
+            let ip: IpAddr = ip_str.parse().unwrap();
+            let result = limiter.ip_in_cidr(&ip, cidr);
+            assert_eq!(result, expected, "IP {} in CIDR {} should be {}", ip_str, cidr, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cidr_ipv6_matching() {
+        let config = RateLimitConfig::default();
+        let limiter = UnifiedRateLimiter::new(config, None);
+
+        // Test IPv6 CIDR matching
+        let test_cases = vec![
+            ("::1", "::1/128", true),
+            ("::2", "::1/128", false),
+            ("2001:db8::1", "2001:db8::/32", true),
+            ("2001:db9::1", "2001:db8::/32", false),
+            ("fe80::1", "fe80::/10", true),
+            ("fec0::1", "fe80::/10", false),
+        ];
+
+        for (ip_str, cidr, expected) in test_cases {
+            let ip: IpAddr = ip_str.parse().unwrap();
+            let result = limiter.ip_in_cidr(&ip, cidr);
+            assert_eq!(result, expected, "IPv6 {} in CIDR {} should be {}", ip_str, cidr, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cidr_invalid_patterns() {
+        let config = RateLimitConfig::default();
+        let limiter = UnifiedRateLimiter::new(config, None);
+
+        let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
+
+        // Test invalid CIDR patterns - should return false safely
+        let invalid_cidrs = vec![
+            "192.168.1.0/33",  // Invalid subnet mask
+            "192.168.1",       // Missing subnet
+            "invalid.cidr",    // Invalid format
+            "192.168.1.0/-1",  // Negative subnet
+            "",                // Empty string
+            "192.168.1.256/24", // Invalid IP
+        ];
+
+        for invalid_cidr in invalid_cidrs {
+            let result = limiter.ip_in_cidr(&ip, invalid_cidr);
+            assert!(!result, "Invalid CIDR '{}' should return false", invalid_cidr);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_allowlist_with_cidr() {
+        let mut config = RateLimitConfig {
+            enable_allowlist: true,
+            per_ip_requests_per_minute: 1,
+            ..Default::default()
+        };
+        // Add CIDR ranges to allowlist
+        config.allowlist_cidrs = vec![
+            "192.168.0.0/16".to_string(),
+            "10.0.0.0/8".to_string(),
+        ];
+
+        let limiter = UnifiedRateLimiter::new(config, None);
+
+        // IPs in allowlisted CIDR ranges should bypass rate limits
+        let allowed_ips = vec![
+            "192.168.1.1",
+            "192.168.100.200",
+            "10.0.0.1",
+            "10.255.255.255",
+        ];
+
+        for ip_str in allowed_ips {
+            let ip: IpAddr = ip_str.parse().unwrap();
+            // Make multiple requests that would normally be rate limited
+            for _ in 0..5 {
+                match limiter.check_rate_limit(ip, None, "/test", None).await {
+                    RateLimitResult::Allowed => {}
+                    _ => panic!("IP {} in allowlisted CIDR should bypass rate limits", ip_str),
+                }
+            }
+        }
+
+        // IPs outside allowlisted ranges should be rate limited
+        let blocked_ip: IpAddr = "172.16.1.1".parse().unwrap();
+        let _ = limiter.check_rate_limit(blocked_ip, None, "/test", None).await;
+        match limiter.check_rate_limit(blocked_ip, None, "/test", None).await {
+            RateLimitResult::Blocked { .. } => {}
+            _ => panic!("IP outside allowlisted CIDR should be rate limited"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_banlist_with_cidr() {
+        let mut config = RateLimitConfig {
+            enable_banlist: true,
+            ..Default::default()
+        };
+        // Add CIDR ranges to banlist
+        config.banlist_cidrs = vec![
+            "203.0.113.0/24".to_string(),  // TEST-NET-3
+            "198.51.100.0/24".to_string(), // TEST-NET-2
+        ];
+
+        let limiter = UnifiedRateLimiter::new(config, None);
+
+        // IPs in banned CIDR ranges should be blocked
+        let banned_ips = vec![
+            "203.0.113.1",
+            "203.0.113.255",
+            "198.51.100.50",
+        ];
+
+        for ip_str in banned_ips {
+            let ip: IpAddr = ip_str.parse().unwrap();
+            match limiter.check_rate_limit(ip, None, "/test", None).await {
+                RateLimitResult::Blocked { reason, .. } => {
+                    assert!(reason.contains("banlist"), "Should be blocked due to banlist");
+                }
+                _ => panic!("IP {} in banned CIDR should be blocked", ip_str),
+            }
+        }
+
+        // IPs outside banned ranges should work normally
+        let allowed_ip: IpAddr = "192.168.1.1".parse().unwrap();
+        match limiter.check_rate_limit(allowed_ip, None, "/test", None).await {
+            RateLimitResult::Allowed => {}
+            _ => panic!("IP outside banned CIDR should be allowed"),
+        }
+    }
+
+    #[cfg(feature = "redis-rate-limiting")]
+    #[tokio::test]
+    async fn test_redis_rate_limiter_creation() {
+        // Test creating rate limiter with Redis URL
+        let config = RateLimitConfig {
+            enable_distributed_limiting: true,
+            ..Default::default()
+        };
+
+        // Should not panic even with invalid Redis URL (graceful fallback)
+        let limiter = UnifiedRateLimiter::new(config, Some("redis://localhost:6379".to_string()));
+        
+        // Verify the limiter was created successfully
+        assert!(limiter.config.enable_distributed_limiting);
+    }
+
+    #[tokio::test]
+    async fn test_redis_feature_disabled() {
+        // Test that without redis-rate-limiting feature, distributed limiting is handled gracefully
+        let config = RateLimitConfig {
+            enable_distributed_limiting: true,
+            ..Default::default()
+        };
+
+        // Should not panic and should log warning about feature not being enabled
+        let limiter = UnifiedRateLimiter::new(config, Some("redis://localhost:6379".to_string()));
+        
+        // Basic functionality should still work
+        let ip = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
+        match limiter.check_rate_limit(ip, None, "/test", None).await {
+            RateLimitResult::Allowed => {}
+            _ => panic!("Basic rate limiting should work without Redis"),
         }
     }
 }

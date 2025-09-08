@@ -20,6 +20,7 @@
 //! - **Token Operations**: Secure token generation and validation
 //! - **Post-Quantum**: Future-ready post-quantum cryptography support
 
+pub mod config_utils;
 pub mod encryption;
 pub mod hashing;
 pub mod jwt;

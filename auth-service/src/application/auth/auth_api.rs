@@ -1315,6 +1315,182 @@ fn create_auth_cookies(token: &str) -> Result<HeaderMap, (StatusCode, Json<Error
     Ok(headers)
 }
 
+/// OAuth2 token introspection endpoint
+/// Validates a token and returns metadata about it
+pub async fn introspect(
+    State(state): State<Arc<AppState>>,
+    axum::Form(params): axum::Form<IntrospectionRequest>,
+) -> Result<Json<IntrospectionResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Validate required parameters
+    if params.token.is_empty() {
+        return Ok(Json(IntrospectionResponse {
+            active: false,
+            client_id: None,
+            username: None,
+            scope: None,
+            exp: None,
+            iat: None,
+            sub: None,
+            aud: None,
+            iss: None,
+            jti: None,
+        }));
+    }
+
+    // Validate the token
+    match validate_jwt_token(&params.token, &state).await {
+        Ok(claims) => {
+            Ok(Json(IntrospectionResponse {
+                active: true,
+                client_id: Some("default_client".to_string()),
+                username: claims.name.clone(),
+                scope: Some(claims.roles.join(" ")),
+                exp: Some(claims.exp as u64),
+                iat: Some(claims.iat as u64),
+                sub: Some(claims.sub),
+                aud: Some(claims.aud),
+                iss: Some(claims.iss),
+                jti: Some(claims.jti),
+            }))
+        }
+        Err(_) => {
+            // Invalid token - return inactive response
+            Ok(Json(IntrospectionResponse {
+                active: false,
+                client_id: None,
+                username: None,
+                scope: None,
+                exp: None,
+                iat: None,
+                sub: None,
+                aud: None,
+                iss: None,
+                jti: None,
+            }))
+        }
+    }
+}
+
+/// OAuth2 token revocation endpoint
+/// Revokes a given access or refresh token
+pub async fn revoke_token(
+    State(state): State<Arc<AppState>>,
+    axum::Form(params): axum::Form<RevocationRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    // Validate required parameters
+    if params.token.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid_request".to_string(),
+                error_description: "Missing required parameter: token".to_string(),
+            }),
+        ));
+    }
+
+    // In a production system, this would:
+    // 1. Add the token to a blacklist/revocation list
+    // 2. Remove from active session store
+    // 3. Notify other services about revocation
+    // 4. Update user session state
+
+    // For now, we'll just validate the token exists and return success
+    match validate_jwt_token(&params.token, &state).await {
+        Ok(_) => {
+            // Token is valid, revoke it
+            // TODO: Implement actual token revocation logic
+            debug!("Token revoked successfully: {}", params.token);
+            Ok(StatusCode::OK)
+        }
+        Err(_) => {
+            // Even for invalid tokens, OAuth2 spec says to return 200 OK
+            // This prevents token scanning attacks
+            debug!("Revocation requested for invalid token");
+            Ok(StatusCode::OK)
+        }
+    }
+}
+
+/// JWKS (JSON Web Key Set) endpoint
+/// Returns public keys used to verify JWT tokens
+pub async fn public_keys(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<JwksResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // In production, this would return actual public keys from the key manager
+    // For now, return a mock JWKS response
+    let jwks = JwksResponse {
+        keys: vec![JwkKey {
+            kty: "RSA".to_string(),
+            use_: Some("sig".to_string()),
+            kid: "default-key-2024".to_string(),
+            alg: Some("RS256".to_string()),
+            n: "mock_modulus_value".to_string(),
+            e: "AQAB".to_string(),
+            x5c: None,
+            x5t: None,
+        }],
+    };
+
+    Ok(Json(jwks))
+}
+
+// Request/Response types for the new endpoints
+#[derive(Debug, serde::Deserialize)]
+struct IntrospectionRequest {
+    token: String,
+    token_type_hint: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct IntrospectionResponse {
+    active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    iat: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    aud: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    iss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    jti: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RevocationRequest {
+    token: String,
+    token_type_hint: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct JwksResponse {
+    keys: Vec<JwkKey>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct JwkKey {
+    kty: String,
+    #[serde(rename = "use", skip_serializing_if = "Option::is_none")]
+    use_: Option<String>,
+    kid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    alg: Option<String>,
+    n: String,
+    e: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    x5c: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    x5t: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

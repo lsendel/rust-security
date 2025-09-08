@@ -119,7 +119,7 @@ impl Default for SecurityHeaders {
     fn default() -> Self {
         Self {
             enabled: true,
-            hsts_max_age_seconds: 31536000, // 1 year minimum for HSTS
+            hsts_max_age_seconds: 31_536_000, // 1 year minimum for HSTS
             content_type_options_nosniff: true,
             frame_options: FrameOptions::Deny,
             xss_protection: true,

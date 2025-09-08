@@ -32,9 +32,33 @@ impl SamlService {
     /// - Base64 encoding fails
     /// - Future AES-GCM encryption fails
     pub fn encrypt_assertion(&self, assertion: &str) -> Result<String, Box<dyn std::error::Error>> {
-        // TODO: Implement AES-GCM encryption when aes_gcm dependency is added
-        // For now, return base64-encoded assertion as a placeholder
-        Ok(STANDARD.encode(assertion.as_bytes()))
+        use aes_gcm::{
+            aead::{Aead, KeyInit, OsRng, generic_array::GenericArray},
+            Aes256Gcm, Nonce
+        };
+
+        // Generate a random 256-bit key (in production, use key management)
+        let key = Aes256Gcm::generate_key(&mut OsRng);
+        let cipher = Aes256Gcm::new(&key);
+
+        // Generate a random 96-bit nonce
+        let nonce_bytes: [u8; 12] = rand::random();
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        // Encrypt the assertion
+        let ciphertext = cipher
+            .encrypt(nonce, assertion.as_bytes())
+            .map_err(|e| format!("AES-GCM encryption failed: {}", e))?;
+
+        // Combine key, nonce, and ciphertext for transport
+        // Note: In production, the key would be managed separately
+        let mut combined = Vec::new();
+        combined.extend_from_slice(&key);
+        combined.extend_from_slice(&nonce_bytes);
+        combined.extend_from_slice(&ciphertext);
+
+        // Return base64-encoded encrypted data
+        Ok(STANDARD.encode(&combined))
     }
 
     /// Decrypts a SAML assertion
@@ -45,9 +69,33 @@ impl SamlService {
     /// - UTF-8 conversion fails
     /// - Future AES-GCM decryption fails
     pub fn decrypt_assertion(&self, encrypted: &str) -> Result<String, Box<dyn std::error::Error>> {
-        // TODO: Implement AES-GCM decryption when aes_gcm dependency is added
-        // For now, assume data is just base64-encoded
-        let decoded_bytes = STANDARD.decode(encrypted)?;
-        String::from_utf8(decoded_bytes).map_err(std::convert::Into::into)
+        use aes_gcm::{
+            aead::{Aead, KeyInit},
+            Aes256Gcm, Nonce, Key
+        };
+
+        // Decode the base64-encoded data
+        let combined = STANDARD.decode(encrypted)
+            .map_err(|e| format!("Base64 decode failed: {}", e))?;
+
+        // Check minimum length (32 bytes key + 12 bytes nonce + at least 16 bytes ciphertext)
+        if combined.len() < 60 {
+            return Err("Invalid encrypted data format".into());
+        }
+
+        // Extract key, nonce, and ciphertext
+        let key = Key::<Aes256Gcm>::from_slice(&combined[..32]);
+        let nonce = Nonce::from_slice(&combined[32..44]);
+        let ciphertext = &combined[44..];
+
+        // Create cipher and decrypt
+        let cipher = Aes256Gcm::new(key);
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext)
+            .map_err(|e| format!("AES-GCM decryption failed: {}", e))?;
+
+        // Convert to string
+        String::from_utf8(plaintext)
+            .map_err(|e| format!("UTF-8 conversion failed: {}", e).into())
     }
 }

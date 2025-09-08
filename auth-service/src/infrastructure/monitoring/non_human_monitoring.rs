@@ -12,11 +12,13 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use crate::application::api::service_identity::{
+    BehavioralBaseline, IdentityType, RequestContext, ServiceIdentity,
+};
 use crate::infrastructure::security::security_monitoring::{
     AlertSeverity, SecurityAlert, SecurityAlertType,
 };
 use crate::jit_token_manager::TokenUsage;
-use crate::application::api::service_identity::{BehavioralBaseline, IdentityType, RequestContext, ServiceIdentity};
 
 /// Monitoring configuration for non-human identities
 #[derive(Debug, Clone, Serialize, Deserialize)]

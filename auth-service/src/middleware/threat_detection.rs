@@ -467,7 +467,9 @@ mod tests {
 
 /// Threat Intelligence Integration (consolidated from threat_intelligence.rs)
 /// Global threat intelligence service instance
-static THREAT_INTELLIGENCE_SERVICE: std::sync::Mutex<Option<std::sync::Arc<ThreatIntelligenceService>>> = std::sync::Mutex::new(None);
+static THREAT_INTELLIGENCE_SERVICE: std::sync::Mutex<
+    Option<std::sync::Arc<ThreatIntelligenceService>>,
+> = std::sync::Mutex::new(None);
 
 /// Initialize the global threat intelligence service
 pub fn initialize_threat_intelligence_service() {
@@ -500,6 +502,7 @@ pub async fn threat_intelligence_middleware(
 
     // For now, we'll analyze after the request to avoid blocking
     let response = next.run(request).await;
+    let status_code = response.status().as_u16();
 
     // Analyze request for threat patterns (async task)
     if get_threat_intelligence_service().is_some() {
@@ -509,8 +512,9 @@ pub async fn threat_intelligence_middleware(
                 method.to_string(),
                 client_ip,
                 user_agent,
-                response.status().as_u16(),
-            ).await;
+                status_code,
+            )
+            .await;
         });
     }
 

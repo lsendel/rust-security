@@ -1,12 +1,12 @@
 // Advanced AI-Powered Threat Detection System
 // Machine learning-based anomaly detection and behavioral analysis
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use std::net::IpAddr;
 
 /// AI threat detection configuration
 #[derive(Debug, Clone)]
@@ -337,29 +337,25 @@ impl ThreatDetectionEngine {
         timestamp: SystemTime,
     ) -> ThreatAnalysisResult {
         let user_hash = self.hash_user_id(user_id);
-        
+
         // Get or create user profile
         let mut profile = self.get_or_create_profile(&user_hash).await;
-        
+
         // Extract features from the event
-        let features = self.extract_features(
-            &profile,
-            ip,
-            user_agent,
-            auth_method,
-            success,
-            timestamp,
-        ).await;
+        let features = self
+            .extract_features(&profile, ip, user_agent, auth_method, success, timestamp)
+            .await;
 
         // Perform anomaly detection
         let anomalies = self.detect_anomalies(&profile, &features).await;
-        
+
         // Calculate threat score
         let threat_score = self.calculate_threat_score(&features, &anomalies).await;
-        
+
         // Update user profile
-        self.update_profile(&mut profile, &features, timestamp).await;
-        
+        self.update_profile(&mut profile, &features, timestamp)
+            .await;
+
         // Store updated profile
         {
             let mut profiles = self.user_profiles.write().await;
@@ -380,7 +376,7 @@ impl ThreatDetectionEngine {
     /// Get or create user behavioral profile
     async fn get_or_create_profile(&self, user_hash: &str) -> UserBehaviorProfile {
         let profiles = self.user_profiles.read().await;
-        
+
         if let Some(profile) = profiles.get(user_hash) {
             profile.clone()
         } else {
@@ -443,35 +439,68 @@ impl ThreatDetectionEngine {
 
         features.insert("hour_of_day".to_string(), hour as f64);
         features.insert("day_of_week".to_string(), day_of_week as f64);
-        features.insert("is_weekend".to_string(), if day_of_week >= 5 { 1.0 } else { 0.0 });
+        features.insert(
+            "is_weekend".to_string(),
+            if day_of_week >= 5 { 1.0 } else { 0.0 },
+        );
 
         // Authentication method features
-        features.insert("auth_method_oauth".to_string(), if auth_method == "oauth" { 1.0 } else { 0.0 });
-        features.insert("auth_method_password".to_string(), if auth_method == "password" { 1.0 } else { 0.0 });
+        features.insert(
+            "auth_method_oauth".to_string(),
+            if auth_method == "oauth" { 1.0 } else { 0.0 },
+        );
+        features.insert(
+            "auth_method_password".to_string(),
+            if auth_method == "password" { 1.0 } else { 0.0 },
+        );
         features.insert("auth_success".to_string(), if success { 1.0 } else { 0.0 });
 
         // Device features
-        features.insert("user_agent_known".to_string(), 
-            if profile.device_patterns.user_agents.contains_key(user_agent) { 1.0 } else { 0.0 });
+        features.insert(
+            "user_agent_known".to_string(),
+            if profile.device_patterns.user_agents.contains_key(user_agent) {
+                1.0
+            } else {
+                0.0
+            },
+        );
 
         // Geographic features (mock implementation)
         let geo_data = self.get_geolocation(ip).await;
         if let Some(geo) = geo_data {
-            features.insert("country_known".to_string(),
-                if profile.auth_patterns.geo_patterns.contains_key(&geo.country) { 1.0 } else { 0.0 });
-            features.insert("country_risk".to_string(), self.get_country_risk(&geo.country).await);
+            features.insert(
+                "country_known".to_string(),
+                if profile
+                    .auth_patterns
+                    .geo_patterns
+                    .contains_key(&geo.country)
+                {
+                    1.0
+                } else {
+                    0.0
+                },
+            );
+            features.insert(
+                "country_risk".to_string(),
+                self.get_country_risk(&geo.country).await,
+            );
         }
 
         // Behavioral deviation features
         let expected_hour_activity = profile.temporal_patterns.hourly_activity[hour];
-        features.insert("hour_deviation".to_string(), 
-            (1.0 - expected_hour_activity).abs());
+        features.insert(
+            "hour_deviation".to_string(),
+            (1.0 - expected_hour_activity).abs(),
+        );
 
         // IP reputation features
         let ip_reputation = self.get_ip_reputation(ip).await;
         if let Some(rep) = ip_reputation {
             features.insert("ip_reputation".to_string(), rep.score);
-            features.insert("ip_malicious".to_string(), if rep.score < 0.5 { 1.0 } else { 0.0 });
+            features.insert(
+                "ip_malicious".to_string(),
+                if rep.score < 0.5 { 1.0 } else { 0.0 },
+            );
         }
 
         features
@@ -480,7 +509,7 @@ impl ThreatDetectionEngine {
     /// Detect anomalies in the current event
     async fn detect_anomalies(
         &self,
-        profile: &UserBehaviorProfile,
+        _profile: &UserBehaviorProfile,
         features: &HashMap<String, f64>,
     ) -> Vec<AnomalyDetection> {
         let mut anomalies = Vec::new();
@@ -604,7 +633,7 @@ impl ThreatDetectionEngine {
         if let Some(hour) = features.get("hour_of_day") {
             let hour_idx = *hour as usize;
             if hour_idx < 24 {
-                profile.temporal_patterns.hourly_activity[hour_idx] = 
+                profile.temporal_patterns.hourly_activity[hour_idx] =
                     (profile.temporal_patterns.hourly_activity[hour_idx] * 0.9) + 0.1;
             }
         }
@@ -612,7 +641,7 @@ impl ThreatDetectionEngine {
         if let Some(day) = features.get("day_of_week") {
             let day_idx = *day as usize;
             if day_idx < 7 {
-                profile.temporal_patterns.daily_activity[day_idx] = 
+                profile.temporal_patterns.daily_activity[day_idx] =
                     (profile.temporal_patterns.daily_activity[day_idx] * 0.9) + 0.1;
             }
         }
@@ -694,7 +723,7 @@ impl ThreatDetectionEngine {
     }
 
     fn hash_user_id(&self, user_id: &str) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(user_id.as_bytes());
         hasher.update(b"threat_detection_salt");
@@ -782,18 +811,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_threat_detection_engine() {
+        use crate::infrastructure::monitoring::security_logging_enhanced::{SecurityEvent, SecurityEventType, SecuritySeverity};
+        
         let config = ThreatDetectionConfig::default();
         let engine = ThreatDetectionEngine::new(config);
-        
-        let result = engine.analyze_authentication(
-            "test_user",
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            "Mozilla/5.0 (Test Browser)",
-            "oauth",
-            true,
-            SystemTime::now(),
-        ).await;
-        
+
+        let result = engine
+            .analyze_authentication(
+                "test_user",
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                "Mozilla/5.0 (Test Browser)",
+                "oauth",
+                true,
+                SystemTime::now(),
+            )
+            .await;
+
+        let detector = AdvancedAIThreatDetector::new(config).await.unwrap();
+        let event = SecurityEvent::new(
+            SecurityEventType::Authentication,
+            SecuritySeverity::Medium,
+            "test-event".to_string(),
+        );
+        let operation_result = detector.analyze_threat(&event).await.unwrap();
         assert!(operation_result.threat_score >= 0.0 && operation_result.threat_score <= 1.0);
         assert!(operation_result.confidence >= 0.0 && operation_result.confidence <= 1.0);
     }
@@ -802,9 +842,9 @@ mod tests {
     async fn test_user_profile_creation() {
         let config = ThreatDetectionConfig::default();
         let engine = ThreatDetectionEngine::new(config);
-        
+
         let profile = engine.create_new_profile("test_hash").await;
-        
+
         assert_eq!(profile.user_id_hash, "test_hash");
         assert_eq!(profile.temporal_patterns.hourly_activity.len(), 24);
         assert_eq!(profile.temporal_patterns.daily_activity.len(), 7);
@@ -819,7 +859,7 @@ mod tests {
             features: HashMap::new(),
             deviation: 0.8,
         };
-        
+
         assert_eq!(anomaly.severity, 0.8);
         assert!(matches!(anomaly.anomaly_type, AnomalyType::UnusualTime));
     }

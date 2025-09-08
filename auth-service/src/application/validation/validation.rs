@@ -837,7 +837,6 @@ pub mod middleware {
     /// Validated JSON extractor that automatically validates DTOs
     pub struct ValidatedJson<T>(pub T);
 
-    #[async_trait::async_trait]
     impl<T, S> FromRequest<S> for ValidatedJson<T>
     where
         T: ValidatedDto + for<'de> Deserialize<'de>,
@@ -846,7 +845,7 @@ pub mod middleware {
         type Rejection = crate::shared::error::AppError;
 
         async fn from_request(
-            req: Request<axum::body::Body>,
+            req: axum::http::Request<axum::body::Body>,
             state: &S,
         ) -> Result<Self, Self::Rejection> {
             let axum::Json(dto) = axum::Json::<T>::from_request(req, state)
@@ -885,7 +884,7 @@ pub mod middleware {
         type Rejection = crate::shared::error::AppError;
 
         async fn from_request(
-            req: Request<axum::body::Body>,
+            req: axum::http::Request<axum::body::Body>,
             state: &S,
         ) -> Result<Self, Self::Rejection> {
             let axum::extract::Query(dto) = axum::extract::Query::<T>::from_request(req, state)

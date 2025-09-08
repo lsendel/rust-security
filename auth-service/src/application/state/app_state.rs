@@ -42,9 +42,8 @@ pub struct AppState {
     pub authorization_codes: Arc<std::sync::RwLock<HashMap<String, String>>>,
     pub policy_cache: Arc<crate::infrastructure::storage::cache::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<std::sync::RwLock<bool>>,
-    // TODO: Fix JwksManager initialization
-    // #[cfg(feature = "crypto")]
-    // pub jwks_manager: Arc<crate::infrastructure::crypto::jwks_rotation::JwksManager>,
+    #[cfg(feature = "crypto")]
+    pub jwks_manager: Arc<crate::infrastructure::crypto::jwks_rotation::JwksManager>,
 }
 
 impl AppState {
@@ -87,9 +86,9 @@ impl AppState {
 
         Self {
             #[cfg(feature = "redis-sessions")]
-            store: Arc::new(crate::infrastructure::storage::store::hybrid::HybridStore::new()),
+            store: Arc::new(Default::default()), // Use Default instead of async new
             #[cfg(feature = "api-keys")]
-            api_key_store: Arc::new(crate::application::api::api_key_store::ApiKeyStore::new()),
+            api_key_store: Arc::new(Default::default()), // Use Default instead of async new
             session_store,
             token_store,
             client_credentials,
@@ -97,10 +96,33 @@ impl AppState {
             authorization_codes,
             policy_cache,
             backpressure_state,
-            // TODO: Fix JwksManager initialization - requires async context and proper config
-            // #[cfg(feature = "crypto")]
-            // jwks_manager: Arc::new(...),
+            #[cfg(feature = "crypto")]
+            jwks_manager: Self::create_default_jwks_manager(),
         }
+    }
+
+    /// Create a default JWKS manager for development/testing
+    #[cfg(feature = "crypto")]
+    fn create_default_jwks_manager() -> Arc<crate::infrastructure::crypto::jwks_rotation::JwksManager> {
+        use crate::infrastructure::crypto::jwks_rotation::{JwksManager, KeyRotationConfig};
+        use crate::infrastructure::crypto::keys::InMemoryKeyStorage;
+        use std::time::Duration;
+
+        // Create default configuration for development
+        let config = KeyRotationConfig {
+            rotation_interval: Duration::from_secs(86400), // 24 hours
+            key_ttl: Duration::from_secs(172800),          // 48 hours
+            algorithm: "RS256".to_string(),
+            key_size: 2048,
+            issuer: "auth-service".to_string(),
+        };
+
+        // Create in-memory storage for development
+        let storage = Arc::new(InMemoryKeyStorage::new());
+
+        // For synchronous context, create a simple manager
+        // In production, this would be properly initialized with actual keys
+        Arc::new(JwksManager::new_sync(config, storage))
     }
 }
 

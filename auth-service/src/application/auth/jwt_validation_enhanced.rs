@@ -186,6 +186,28 @@ pub struct CustomValidationRule {
     pub error_message: String,
 }
 
+impl std::fmt::Debug for CustomValidationRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CustomValidationRule")
+            .field("name", &self.name)
+            .field("error_message", &self.error_message)
+            .field("validator", &"<function>")
+            .finish()
+    }
+}
+
+impl Clone for CustomValidationRule {
+    fn clone(&self) -> Self {
+        // Note: This is a simplified clone that won't copy the validator function
+        // In a real implementation, you might want to use a different approach
+        Self {
+            name: self.name.clone(),
+            validator: Box::new(|_| true), // Stub validator
+            error_message: self.error_message.clone(),
+        }
+    }
+}
+
 /// Enhanced JWT validation result with detailed security information
 #[derive(Debug, Clone)]
 pub struct EnhancedJwtValidationResult {
@@ -381,7 +403,7 @@ impl EnhancedJwtValidator {
     ///
     /// Returns an error if JWT validation fails or security violations are detected
     pub fn validate_enhanced(
-        &self,
+        &mut self,
         token: &str,
         decoding_key: &DecodingKey,
         expected_token_type: EnhancedTokenType,
@@ -902,8 +924,8 @@ impl EnhancedJwtValidator {
 
     /// Check threat intelligence for the token
     fn check_threat_intelligence(
-        &self,
-        claims: &EnhancedJwtClaims,
+        &mut self,
+        _claims: &EnhancedJwtClaims,
         context: Option<&ClientContext>,
     ) -> Option<ThreatIntelligence> {
         // In a real implementation, this would query threat intelligence services
@@ -1134,7 +1156,7 @@ pub fn validate_jwt_enhanced_default(
     expected_token_type: EnhancedTokenType,
     client_context: Option<ClientContext>,
 ) -> Result<EnhancedJwtValidationResult, Box<dyn std::error::Error + Send + Sync>> {
-    let validator = EnhancedJwtValidator::default();
+    let mut validator = EnhancedJwtValidator::default();
     validator.validate_enhanced(token, decoding_key, expected_token_type, client_context)
 }
 

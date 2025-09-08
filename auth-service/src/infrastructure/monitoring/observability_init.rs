@@ -11,9 +11,9 @@ use std::sync::Arc;
 use tracing::info;
 
 #[cfg(feature = "monitoring")]
-use crate::metrics::MetricsRegistry;
-#[cfg(feature = "monitoring")]
 use crate::infrastructure::monitoring::security_metrics::SecurityMetrics;
+#[cfg(feature = "monitoring")]
+use crate::metrics::MetricsRegistry;
 
 /// Enhanced observability system (stub implementation)
 #[derive(Debug, Clone)]

@@ -140,19 +140,19 @@ impl EnhancedIpExtractor {
     }
 
     /// Extract and validate client IP address from HTTP headers
-    /// 
+    ///
     /// This function securely extracts the client IP address from HTTP headers,
     /// with proper validation and security checks.
-    /// 
+    ///
     /// # Security Considerations
-    /// 
+    ///
     /// - Only trusts proxy headers when explicitly configured
     /// - Validates all extracted IP addresses using proper parsing
     /// - Detects and handles private/reserved IP addresses
     /// - Prevents IP address spoofing through header validation
-    /// 
+    ///
     /// # Header Priority
-    /// 
+    ///
     /// 1. `X-Forwarded-For` - Most common proxy header (takes first IP)
     /// 2. `X-Real-IP` - Nginx and similar proxies
     /// 3. `CF-Connecting-IP` - Cloudflare specific
@@ -208,7 +208,7 @@ impl EnhancedIpExtractor {
                     // Parse and validate the IP
                     if let Ok(ip) = ip_str.parse::<IpAddr>() {
                         let ip_info = self.validate_and_classify_ip(ip)?;
-                        
+
                         // Additional security checks for proxy headers
                         if self.is_trusted_source(&ip_info) {
                             return Ok(Some(ip_info));
@@ -263,8 +263,9 @@ impl EnhancedIpExtractor {
             return Err(IpValidationError::BogonAddress);
         }
 
-        if self.config.reject_private_in_public 
-            && security_classification == SecurityClassification::Private {
+        if self.config.reject_private_in_public
+            && security_classification == SecurityClassification::Private
+        {
             return Err(IpValidationError::PrivateAddressNotAllowed);
         }
 
@@ -276,13 +277,13 @@ impl EnhancedIpExtractor {
             ip_type,
             security_classification,
             is_trusted_proxy,
-            should_anonymize: self.config.anonymize_logs 
+            should_anonymize: self.config.anonymize_logs
                 || security_classification == SecurityClassification::Private,
         })
     }
 
     /// Check if an IP address has a valid format
-    fn is_valid_ip_format(&self, ip: IpAddr) -> bool {
+    fn is_valid_ip_format(&self, _ip: IpAddr) -> bool {
         // The IpAddr parsing already validates the format
         // Additional checks could be added here if needed
         true
@@ -381,8 +382,13 @@ impl EnhancedIpExtractor {
 
         // IPv4-compatible IPv6 addresses (deprecated)
         if let Some(ipv4) = ip.to_ipv4() {
-            if ip.segments()[0] == 0 && ip.segments()[1] == 0 && ip.segments()[2] == 0 
-                && ip.segments()[3] == 0 && ip.segments()[4] == 0 && ip.segments()[5] == 0 {
+            if ip.segments()[0] == 0
+                && ip.segments()[1] == 0
+                && ip.segments()[2] == 0
+                && ip.segments()[3] == 0
+                && ip.segments()[4] == 0
+                && ip.segments()[5] == 0
+            {
                 return self.classify_ipv4_security(ipv4);
             }
         }
@@ -418,139 +424,139 @@ impl EnhancedIpExtractor {
     /// Check if an IPv4 address is a bogon (unallocated)
     fn is_ipv4_bogon(&self, ip: Ipv4Addr) -> bool {
         let octets = ip.octets();
-        
+
         // 0.0.0.0/8 - Current network (RFC 1700)
         if octets[0] == 0 {
             return true;
         }
-        
+
         // 100.64.0.0/10 - Shared address space (RFC 6598)
         if octets[0] == 100 && (octets[1] & 0xC0) == 64 {
             return true;
         }
-        
+
         // 127.0.0.0/8 - Loopback (already checked)
         if octets[0] == 127 {
             return false; // Already classified as loopback
         }
-        
+
         // 169.254.0.0/16 - Link-local (already checked)
         if octets[0] == 169 && octets[1] == 254 {
             return false; // Already classified as special use
         }
-        
+
         // 192.0.0.0/24 - IETF Protocol Assignments (RFC 6890)
         if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 {
             return true;
         }
-        
+
         // 192.0.2.0/24 - Documentation (TEST-NET-1) (already checked)
         if octets[0] == 192 && octets[1] == 0 && octets[2] == 2 {
             return false; // Already classified as reserved
         }
-        
+
         // 192.88.99.0/24 - 6to4 relay anycast (RFC 3068)
         if octets[0] == 192 && octets[1] == 88 && octets[2] == 99 {
             return true;
         }
-        
+
         // 198.18.0.0/15 - Network interconnect device benchmark testing (RFC 2544)
         if octets[0] == 198 && (octets[1] == 18 || octets[1] == 19) {
             return false; // Already classified as reserved
         }
-        
+
         // 198.51.100.0/24 - Documentation (TEST-NET-2) (already checked)
         if octets[0] == 198 && octets[1] == 51 && octets[2] == 100 {
             return false; // Already classified as reserved
         }
-        
+
         // 203.0.113.0/24 - Documentation (TEST-NET-3) (already checked)
         if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
             return false; // Already classified as reserved
         }
-        
+
         // 224.0.0.0/4 - Multicast (already checked)
         if (octets[0] & 0xF0) == 224 {
             return false; // Already classified as special use
         }
-        
+
         // 240.0.0.0/4 - Reserved for future use (RFC 1700)
         if (octets[0] & 0xF0) == 240 {
             return true;
         }
-        
+
         // 255.255.255.255/32 - Limited broadcast (already checked)
         if ip == Ipv4Addr::BROADCAST {
             return false; // Already classified as special use
         }
-        
+
         false
     }
 
     /// Check if an IPv6 address is a bogon (unallocated)
     fn is_ipv6_bogon(&self, ip: Ipv6Addr) -> bool {
         let segments = ip.segments();
-        
+
         // ::/128 - Unspecified address (already checked)
         if segments == [0, 0, 0, 0, 0, 0, 0, 0] {
             return false; // Already classified as reserved
         }
-        
+
         // ::1/128 - Loopback (already checked)
         if segments == [0, 0, 0, 0, 0, 0, 0, 1] {
             return false; // Already classified as loopback
         }
-        
+
         // 100::/64 - Discard prefix (RFC 6666)
         if segments[0] == 0x0100 && segments[1] == 0 && segments[2] == 0 && segments[3] == 0 {
             return true;
         }
-        
+
         // 2001:1::1/128 - Port Control Protocol Anycast
         if segments == [0x2001, 0x0001, 0, 0, 0, 0, 0, 0x0001] {
             return true;
         }
-        
+
         // 2001:1::2/128 - Traversal Using Relays around NAT Anycast
         if segments == [0x2001, 0x0001, 0, 0, 0, 0, 0, 0x0002] {
             return true;
         }
-        
+
         // 2001:2::/48 - Benchmarking (RFC 5180)
         if segments[0] == 0x2001 && segments[1] == 0x0002 && segments[2] == 0 {
             return true;
         }
-        
+
         // 2001:3::/32 - AMT (RFC 7450)
         if segments[0] == 0x2001 && segments[1] == 0x0003 {
             return true;
         }
-        
+
         // 2001:4:112::/48 - AS112-v6 (RFC 7535)
         if segments[0] == 0x2001 && segments[1] == 0x0004 && segments[2] == 0x0112 {
             return true;
         }
-        
+
         // 2001:5::/32 - EID-in-LISP-and-No-Map-EID (RFC 7954)
         if segments[0] == 0x2001 && segments[1] == 0x0005 {
             return true;
         }
-        
+
         // 2001:10::/28 - ORCHID (RFC 4843, obsoleted by RFC 7343)
         if segments[0] == 0x2001 && (segments[1] & 0xFFF0) == 0x0010 {
             return true;
         }
-        
+
         // 2001:20::/28 - ORCHIDv2 (RFC 7343)
         if segments[0] == 0x2001 && (segments[1] & 0xFFF0) == 0x0020 {
             return true;
         }
-        
+
         // 2001:db8::/32 - Documentation (already checked)
         if segments[0] == 0x2001 && segments[1] == 0xDB8 {
             return false; // Already classified as reserved
         }
-        
+
         false
     }
 
@@ -570,24 +576,24 @@ impl EnhancedIpExtractor {
         if ip_info.is_trusted_proxy {
             return true;
         }
-        
+
         // Loopback addresses are generally trusted
         if ip_info.security_classification == SecurityClassification::Loopback {
             return true;
         }
-        
+
         // Private addresses might be trusted in certain contexts
         if ip_info.security_classification == SecurityClassification::Private {
             // In internal networks, private addresses might be trusted
             // This depends on the specific deployment context
             return false; // Conservative approach - not trusted by default
         }
-        
+
         false
     }
 
     /// Anonymize an IP address for privacy protection
-    /// 
+    ///
     /// This function removes identifying information from IP addresses
     /// while preserving enough information for geolocation and threat analysis.
     pub fn anonymize_ip(&self, ip: IpAddr) -> IpAddr {
@@ -601,15 +607,21 @@ impl EnhancedIpExtractor {
                 let segments = ipv6.segments();
                 // Remove the last 32 bits for IPv6 (4 segments)
                 IpAddr::V6(Ipv6Addr::new(
-                    segments[0], segments[1], segments[2], segments[3],
-                    segments[4], segments[5], 0, 0
+                    segments[0],
+                    segments[1],
+                    segments[2],
+                    segments[3],
+                    segments[4],
+                    segments[5],
+                    0,
+                    0,
                 ))
             }
         }
     }
 
     /// Get a display-safe version of an IP address
-    /// 
+    ///
     /// Returns either the full IP address or an anonymized version based on configuration
     /// and security classification.
     pub fn display_ip(&self, ip_info: &EnhancedIpInfo) -> String {
@@ -623,14 +635,16 @@ impl EnhancedIpExtractor {
     /// Check if an IP address should be blocked based on security policy
     pub fn should_block_ip(&self, ip_info: &EnhancedIpInfo) -> bool {
         // Block bogon addresses if configured
-        if self.config.reject_bogons 
-            && ip_info.security_classification == SecurityClassification::Bogon {
+        if self.config.reject_bogons
+            && ip_info.security_classification == SecurityClassification::Bogon
+        {
             return true;
         }
 
         // Block private addresses in public contexts if configured
-        if self.config.reject_private_in_public 
-            && ip_info.security_classification == SecurityClassification::Private {
+        if self.config.reject_private_in_public
+            && ip_info.security_classification == SecurityClassification::Private
+        {
             return true;
         }
 
@@ -664,8 +678,12 @@ impl std::fmt::Display for IpValidationError {
         match self {
             IpValidationError::InvalidFormat => write!(f, "Invalid IP address format"),
             IpValidationError::BogonAddress => write!(f, "Bogon address not allowed"),
-            IpValidationError::PrivateAddressNotAllowed => write!(f, "Private address not allowed in this context"),
-            IpValidationError::ReservedAddressNotAllowed => write!(f, "Reserved address not allowed"),
+            IpValidationError::PrivateAddressNotAllowed => {
+                write!(f, "Private address not allowed in this context")
+            }
+            IpValidationError::ReservedAddressNotAllowed => {
+                write!(f, "Reserved address not allowed")
+            }
             IpValidationError::HeaderParseError => write!(f, "Failed to parse IP from headers"),
         }
     }
@@ -674,7 +692,7 @@ impl std::fmt::Display for IpValidationError {
 impl std::error::Error for IpValidationError {}
 
 /// Convenience function for extracting client IP with default configuration
-/// 
+///
 /// This function provides a simple interface for extracting and validating
 /// client IP addresses with default security settings.
 pub fn extract_client_ip_enhanced(
@@ -699,46 +717,64 @@ mod tests {
     #[test]
     fn test_ipv4_classification() {
         let extractor = EnhancedIpExtractor::default();
-        
+
         // Public IP
         let public_ip: IpAddr = "8.8.8.8".parse().unwrap();
         let ip_info = extractor.validate_and_classify_ip(public_ip).unwrap();
-        assert_eq!(ip_info.security_classification, SecurityClassification::Public);
+        assert_eq!(
+            ip_info.security_classification,
+            SecurityClassification::Public
+        );
         assert_eq!(ip_info.ip_type, IpType::IPv4);
-        
+
         // Private IP
         let private_ip: IpAddr = "192.168.1.1".parse().unwrap();
         let ip_info = extractor.validate_and_classify_ip(private_ip).unwrap();
-        assert_eq!(ip_info.security_classification, SecurityClassification::Private);
+        assert_eq!(
+            ip_info.security_classification,
+            SecurityClassification::Private
+        );
         assert_eq!(ip_info.ip_type, IpType::IPv4);
-        
+
         // Loopback IP
         let loopback_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let ip_info = extractor.validate_and_classify_ip(loopback_ip).unwrap();
-        assert_eq!(ip_info.security_classification, SecurityClassification::Loopback);
+        assert_eq!(
+            ip_info.security_classification,
+            SecurityClassification::Loopback
+        );
         assert_eq!(ip_info.ip_type, IpType::IPv4);
     }
 
     #[test]
     fn test_ipv6_classification() {
         let extractor = EnhancedIpExtractor::default();
-        
+
         // Public IPv6
         let public_ip: IpAddr = "::ffff:8.8.8.8".parse().unwrap(); // IPv4-mapped IPv6
         let ip_info = extractor.validate_and_classify_ip(public_ip).unwrap();
-        assert_eq!(ip_info.security_classification, SecurityClassification::Public);
+        assert_eq!(
+            ip_info.security_classification,
+            SecurityClassification::Public
+        );
         assert_eq!(ip_info.ip_type, IpType::IPv4MappedIPv6);
-        
+
         // Loopback IPv6
         let loopback_ip: IpAddr = "::1".parse().unwrap();
         let ip_info = extractor.validate_and_classify_ip(loopback_ip).unwrap();
-        assert_eq!(ip_info.security_classification, SecurityClassification::Loopback);
+        assert_eq!(
+            ip_info.security_classification,
+            SecurityClassification::Loopback
+        );
         assert_eq!(ip_info.ip_type, IpType::IPv6);
-        
+
         // Unique local IPv6
         let ula_ip: IpAddr = "fd12:3456:789a:bcde::1".parse().unwrap();
         let ip_info = extractor.validate_and_classify_ip(ula_ip).unwrap();
-        assert_eq!(ip_info.security_classification, SecurityClassification::Private);
+        assert_eq!(
+            ip_info.security_classification,
+            SecurityClassification::Private
+        );
         assert_eq!(ip_info.ip_type, IpType::IPv6);
     }
 
@@ -746,32 +782,39 @@ mod tests {
     fn test_header_extraction() {
         let extractor = EnhancedIpExtractor::default();
         let mut headers = HeaderMap::new();
-        
+
         // Test X-Forwarded-For
-        headers.insert("x-forwarded-for", HeaderValue::from_static("203.0.113.1, 198.51.100.1"));
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_static("203.0.113.1, 198.51.100.1"),
+        );
         let connection_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        
+
         // Without trusting proxy headers, should return connection IP
-        let ip_info = extractor.extract_client_ip(&headers, connection_ip).unwrap();
+        let ip_info = extractor
+            .extract_client_ip(&headers, connection_ip)
+            .unwrap();
         assert_eq!(ip_info.address, connection_ip);
-        
+
         // With trusting proxy headers
         let mut config = IpValidationConfig::default();
         config.trust_proxy_headers = true;
         let extractor = EnhancedIpExtractor::new(config);
-        let ip_info = extractor.extract_client_ip(&headers, connection_ip).unwrap();
+        let ip_info = extractor
+            .extract_client_ip(&headers, connection_ip)
+            .unwrap();
         assert_eq!(ip_info.address.to_string(), "203.0.113.1");
     }
 
     #[test]
     fn test_ip_anonymization() {
         let extractor = EnhancedIpExtractor::default();
-        
+
         // Test IPv4 anonymization
         let ipv4: IpAddr = "192.168.1.100".parse().unwrap();
         let anonymized = extractor.anonymize_ip(ipv4);
         assert_eq!(anonymized.to_string(), "192.168.1.0");
-        
+
         // Test IPv6 anonymization
         let ipv6: IpAddr = "2001:db8::1234:5678".parse().unwrap();
         let anonymized = extractor.anonymize_ip(ipv6);
@@ -783,14 +826,14 @@ mod tests {
         let mut config = IpValidationConfig::default();
         config.reject_bogons = true;
         config.reject_private_in_public = true;
-        
+
         let extractor = EnhancedIpExtractor::new(config);
-        
+
         // Test bogon blocking
         let bogon_ip: IpAddr = "198.18.0.1".parse().unwrap(); // Benchmarking address
         let ip_info = extractor.validate_and_classify_ip(bogon_ip).unwrap();
         assert!(extractor.should_block_ip(&ip_info));
-        
+
         // Test private blocking in public context
         let private_ip: IpAddr = "10.0.0.1".parse().unwrap();
         let ip_info = extractor.validate_and_classify_ip(private_ip).unwrap();
@@ -802,10 +845,12 @@ mod tests {
         let mut config = IpValidationConfig::default();
         config.trust_proxy_headers = true;
         // Add localhost as trusted proxy
-        config.trusted_proxies.push(IpNet::V4(Ipv4Addr::new(127, 0, 0, 1).into()));
-        
+        config
+            .trusted_proxies
+            .push(IpNet::V4(Ipv4Addr::new(127, 0, 0, 1).into()));
+
         let extractor = EnhancedIpExtractor::new(config);
-        
+
         let ip: IpAddr = "127.0.0.1".parse().unwrap();
         assert!(extractor.is_trusted_proxy(ip));
     }

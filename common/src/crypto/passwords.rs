@@ -150,65 +150,20 @@ pub struct PasswordConfig {
 
 impl FromEnvironment for PasswordConfig {
     fn from_env() -> CryptoResult<Self> {
-        let min_length = env::var("PASSWORD_MIN_LENGTH")
-            .unwrap_or_else(|_| "12".to_string())
-            .parse()
-            .map_err(|_| {
-                CryptoError::InvalidConfiguration("Invalid PASSWORD_MIN_LENGTH".to_string())
-            })?;
+        use crate::crypto::config_utils::ConfigLoader;
 
-        let require_uppercase = env::var("PASSWORD_REQUIRE_UPPERCASE")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse()
-            .unwrap_or(true);
+        let min_length = ConfigLoader::load_optional_with_default("PASSWORD_MIN_LENGTH", 12u32)?;
+        let require_uppercase = ConfigLoader::load_bool("PASSWORD_REQUIRE_UPPERCASE", true);
+        let require_lowercase = ConfigLoader::load_bool("PASSWORD_REQUIRE_LOWERCASE", true);
+        let require_numbers = ConfigLoader::load_bool("PASSWORD_REQUIRE_NUMBERS", true);
+        let require_special_chars = ConfigLoader::load_bool("PASSWORD_REQUIRE_SPECIAL_CHARS", true);
 
-        let require_lowercase = env::var("PASSWORD_REQUIRE_LOWERCASE")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse()
-            .unwrap_or(true);
+        let memory_cost = ConfigLoader::load_optional_with_default("ARGON2_MEMORY_COST", 65536u32)?;
+        let time_cost = ConfigLoader::load_optional_with_default("ARGON2_TIME_COST", 3u32)?;
+        let parallelism = ConfigLoader::load_optional_with_default("ARGON2_PARALLELISM", 4u32)?;
 
-        let require_numbers = env::var("PASSWORD_REQUIRE_NUMBERS")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse()
-            .unwrap_or(true);
-
-        let require_special_chars = env::var("PASSWORD_REQUIRE_SPECIAL_CHARS")
-            .unwrap_or_else(|_| "true".to_string())
-            .parse()
-            .unwrap_or(true);
-
-        let memory_cost = env::var("ARGON2_MEMORY_COST")
-            .unwrap_or_else(|_| "65536".to_string())
-            .parse()
-            .map_err(|_| {
-                CryptoError::InvalidConfiguration("Invalid ARGON2_MEMORY_COST".to_string())
-            })?;
-
-        let time_cost = env::var("ARGON2_TIME_COST")
-            .unwrap_or_else(|_| "3".to_string())
-            .parse()
-            .map_err(|_| {
-                CryptoError::InvalidConfiguration("Invalid ARGON2_TIME_COST".to_string())
-            })?;
-
-        let parallelism = env::var("ARGON2_PARALLELISM")
-            .unwrap_or_else(|_| "4".to_string())
-            .parse()
-            .map_err(|_| {
-                CryptoError::InvalidConfiguration("Invalid ARGON2_PARALLELISM".to_string())
-            })?;
-
-        let check_breached = env::var("PASSWORD_CHECK_BREACHED")
-            .unwrap_or_else(|_| "false".to_string())
-            .parse()
-            .unwrap_or(false);
-
-        let max_age_days = env::var("PASSWORD_MAX_AGE_DAYS")
-            .unwrap_or_else(|_| "0".to_string())
-            .parse()
-            .map_err(|_| {
-                CryptoError::InvalidConfiguration("Invalid PASSWORD_MAX_AGE_DAYS".to_string())
-            })?;
+        let check_breached = ConfigLoader::load_bool("PASSWORD_CHECK_BREACHED", false);
+        let max_age_days = ConfigLoader::load_optional_with_default("PASSWORD_MAX_AGE_DAYS", 0u32)?;
 
         Ok(Self {
             policy: PasswordPolicy {
@@ -236,18 +191,11 @@ impl FromEnvironment for PasswordConfig {
 
 impl CryptoValidation for PasswordConfig {
     fn validate(&self) -> CryptoResult<()> {
-        // Password policy validation
-        if self.policy.min_length < 8 {
-            return Err(CryptoError::ValidationFailed(
-                "Password minimum length must be at least 8".to_string(),
-            ));
-        }
+        use crate::crypto::config_utils::ConfigLoader;
 
-        if self.policy.max_length > 1024 {
-            return Err(CryptoError::ValidationFailed(
-                "Password maximum length too high (DoS risk)".to_string(),
-            ));
-        }
+        // Password policy validation
+        ConfigLoader::validate_minimum(self.policy.min_length, 8, "Password minimum length")?;
+        ConfigLoader::validate_maximum(self.policy.max_length, 1024, "Password maximum length")?;
 
         if self.policy.min_length >= self.policy.max_length {
             return Err(CryptoError::ValidationFailed(
@@ -255,39 +203,23 @@ impl CryptoValidation for PasswordConfig {
             ));
         }
 
-        // Argon2 validation
-        if self.argon2.memory_cost < 32768 {
-            // 32MB minimum
-            return Err(CryptoError::ValidationFailed(
-                "Argon2 memory cost too low (minimum 32MB)".to_string(),
-            ));
-        }
+        // Argon2 validation with clear parameter names
+        ConfigLoader::validate_range(
+            self.argon2.memory_cost,
+            32768,     // 32MB minimum
+            1_048_576, // 1GB maximum
+            "Argon2 memory cost",
+        )?;
 
-        if self.argon2.memory_cost > 1048576 {
-            // 1GB maximum
-            return Err(CryptoError::ValidationFailed(
-                "Argon2 memory cost too high (maximum 1GB)".to_string(),
-            ));
-        }
-
-        if self.argon2.time_cost < 2 {
-            return Err(CryptoError::ValidationFailed(
-                "Argon2 time cost too low (minimum 2)".to_string(),
-            ));
-        }
-
-        if self.argon2.parallelism < 1 || self.argon2.parallelism > 16 {
-            return Err(CryptoError::ValidationFailed(
-                "Argon2 parallelism must be between 1 and 16".to_string(),
-            ));
-        }
+        ConfigLoader::validate_minimum(self.argon2.time_cost, 2, "Argon2 time cost")?;
+        ConfigLoader::validate_range(self.argon2.parallelism, 1, 16, "Argon2 parallelism")?;
 
         Ok(())
     }
 }
 
 /// Secure password hash with metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SecurePasswordHash {
     /// Argon2 hash string
     #[serde(with = "zeroize_serde")]
@@ -696,13 +628,13 @@ mod tests {
                 prop_assert!(is_valid);
             }
 
-            #[test] 
+            #[test]
             fn test_different_passwords_different_hashes(
                 password1 in "[a-zA-Z0-9!@#$%^&*()_+]{8,32}",
                 password2 in "[a-zA-Z0-9!@#$%^&*()_+]{8,32}"
             ) {
                 prop_assume!(password1 != password2);
-                
+
                 let config = PasswordConfig::default();
                 let ops = PasswordOperations::new(config)?;
 
@@ -710,8 +642,8 @@ mod tests {
                 let hash2 = ops.hash_password(&password2)?;
 
                 // Different passwords should produce different hashes
-                prop_assert_ne!(hash1, hash2);
-                
+                prop_assert_ne!(hash1.clone(), hash2.clone());
+
                 // Each password should only verify against its own hash
                 prop_assert!(ops.verify_password(&password1, &hash1)?);
                 prop_assert!(ops.verify_password(&password2, &hash2)?);
@@ -730,8 +662,8 @@ mod tests {
                 let hash2 = ops.hash_password(&password)?;
 
                 // Same password with different salts should produce different hashes
-                prop_assert_ne!(hash1, hash2);
-                
+                prop_assert_ne!(hash1.clone(), hash2.clone());
+
                 // Both should verify correctly
                 prop_assert!(ops.verify_password(&password, &hash1)?);
                 prop_assert!(ops.verify_password(&password, &hash2)?);
@@ -748,16 +680,16 @@ mod tests {
 
                 // Generated password should have correct length
                 prop_assert_eq!(password.len(), length as usize);
-                
+
                 // Should meet strength requirements
                 prop_assert!(ops.validate_password_strength(&password).is_ok());
-                
+
                 // Should contain required character types for minimum security
                 if length >= 8 {
                     let has_upper = password.chars().any(|c| c.is_ascii_uppercase());
                     let has_lower = password.chars().any(|c| c.is_ascii_lowercase());
                     let has_digit = password.chars().any(|c| c.is_ascii_digit());
-                    
+
                     // At least some character diversity (not all same type)
                     prop_assert!(has_upper || has_lower || has_digit);
                 }
@@ -775,7 +707,7 @@ mod tests {
 
                 let result = ops.validate_password_strength(&password);
 
-                // Validation should be consistent 
+                // Validation should be consistent
                 let result2 = ops.validate_password_strength(&password);
                 prop_assert_eq!(result.is_ok(), result2.is_ok());
 

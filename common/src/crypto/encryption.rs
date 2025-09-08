@@ -199,7 +199,7 @@ impl EncryptionOperations {
         match self.config.algorithm {
             EncryptionAlgorithm::Aes256Gcm => self.aes_256_gcm_encrypt(plaintext, associated_data),
             EncryptionAlgorithm::ChaCha20Poly1305 => {
-                self.aes_256_gcm_encrypt(plaintext, associated_data)
+                self.chacha20_poly1305_encrypt(plaintext, associated_data)
             }
             #[cfg(feature = "post-quantum")]
             EncryptionAlgorithm::PqEncryption => Err(EncryptionError::UnsupportedAlgorithm(
@@ -218,7 +218,7 @@ impl EncryptionOperations {
         match encrypted.algorithm {
             EncryptionAlgorithm::Aes256Gcm => self.aes_256_gcm_decrypt(encrypted, associated_data),
             EncryptionAlgorithm::ChaCha20Poly1305 => {
-                self.aes_256_gcm_decrypt(encrypted, associated_data)
+                self.chacha20_poly1305_decrypt(encrypted, associated_data)
             }
             #[cfg(feature = "post-quantum")]
             EncryptionAlgorithm::PqEncryption => Err(EncryptionError::UnsupportedAlgorithm(
@@ -354,6 +354,87 @@ impl EncryptionOperations {
 
         Ok(plaintext.to_vec())
     }
+
+    /// ChaCha20Poly1305 encryption implementation
+    fn chacha20_poly1305_encrypt(
+        &self,
+        plaintext: &[u8],
+        associated_data: Option<&[u8]>,
+    ) -> CryptoResult<EncryptedData> {
+        use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, CHACHA20_POLY1305};
+
+        // Generate a secure random nonce
+        let mut nonce_bytes = vec![0u8; 12];
+        self.rng.fill(&mut nonce_bytes).map_err(|_| {
+            EncryptionError::EncryptionFailed("Nonce generation failed".to_string())
+        })?;
+
+        // Prepare the key
+        let key_bytes = self.config.key.as_bytes();
+
+        // Create the encryption key
+        let unbound_key = UnboundKey::new(&CHACHA20_POLY1305, key_bytes)
+            .map_err(|_| EncryptionError::EncryptionFailed("Invalid encryption key".to_string()))?;
+        let key = LessSafeKey::new(unbound_key);
+
+        // Create nonce
+        let nonce = Nonce::try_assume_unique_for_key(&nonce_bytes)
+            .map_err(|_| EncryptionError::EncryptionFailed("Invalid nonce".to_string()))?;
+
+        // Encrypt the data
+        let mut ciphertext = plaintext.to_vec();
+        key.seal_in_place_append_tag(
+            nonce,
+            Aad::from(associated_data.unwrap_or_default()),
+            &mut ciphertext,
+        )
+        .map_err(|_| {
+            EncryptionError::EncryptionFailed("Encryption operation failed".to_string())
+        })?;
+
+        Ok(EncryptedData {
+            ciphertext,
+            nonce: nonce_bytes,
+            algorithm: self.config.algorithm.clone(),
+            associated_data: associated_data.map(|d| d.to_vec()),
+            created_at: chrono::Utc::now(),
+        })
+    }
+
+    /// ChaCha20Poly1305 decryption implementation
+    fn chacha20_poly1305_decrypt(
+        &self,
+        encrypted: &EncryptedData,
+        associated_data: Option<&[u8]>,
+    ) -> CryptoResult<Vec<u8>> {
+        use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, CHACHA20_POLY1305};
+
+        // Prepare the key
+        let key_bytes = self.config.key.as_bytes();
+
+        // Create the decryption key
+        let unbound_key = UnboundKey::new(&CHACHA20_POLY1305, key_bytes)
+            .map_err(|_| EncryptionError::DecryptionFailed("Invalid decryption key".to_string()))?;
+        let key = LessSafeKey::new(unbound_key);
+
+        // Create nonce from stored nonce
+        let nonce = Nonce::try_assume_unique_for_key(&encrypted.nonce)
+            .map_err(|_| EncryptionError::DecryptionFailed("Invalid nonce".to_string()))?;
+
+        // Decrypt the data
+        let mut ciphertext = encrypted.ciphertext.clone();
+        let plaintext = key
+            .open_in_place(
+                nonce,
+                Aad::from(associated_data.unwrap_or_default()),
+                &mut ciphertext,
+            )
+            .map_err(|_| {
+                EncryptionError::DecryptionFailed("Decryption operation failed".to_string())
+            })?;
+
+        Ok(plaintext.to_vec())
+    }
 }
 
 /// Parse encryption algorithm from string
@@ -439,12 +520,14 @@ mod tests {
                 let encrypted2 = ops.encrypt(&plaintext, None)?;
 
                 // Different encryptions should produce different ciphertext (due to random nonce)
-                prop_assert_ne!(encrypted1.ciphertext, encrypted2.ciphertext);
-                
+                let encrypted1_ciphertext = encrypted1.ciphertext.clone();
+                let encrypted2_ciphertext = encrypted2.ciphertext.clone();
+                prop_assert_ne!(encrypted1_ciphertext, encrypted2_ciphertext);
+
                 // But both should decrypt to the same plaintext
                 let decrypted1 = ops.decrypt(&encrypted1, None)?;
                 let decrypted2 = ops.decrypt(&encrypted2, None)?;
-                prop_assert_eq!(decrypted1, decrypted2);
+                prop_assert_eq!(decrypted1.clone(), decrypted2);
                 prop_assert_eq!(plaintext, decrypted1);
             }
 
@@ -460,7 +543,7 @@ mod tests {
 
                 let ops = EncryptionOperations::new(config)?;
                 let ad_option = if associated_data.is_empty() { None } else { Some(associated_data.as_slice()) };
-                
+
                 let encrypted = ops.encrypt(&plaintext, ad_option)?;
                 let decrypted = ops.decrypt(&encrypted, ad_option)?;
 
@@ -474,22 +557,24 @@ mod tests {
                 key_suffix2 in 0u8..99u8
             ) {
                 prop_assume!(key_suffix1 != key_suffix2);
-                
+
                 let key1 = format!("ThisIsASecure32ByteKeyForTest_{:02}", key_suffix1);
                 let key2 = format!("ThisIsASecure32ByteKeyForTest_{:02}", key_suffix2);
-                
+
                 let config1 = EncryptionConfig { key: key1, ..Default::default() };
                 let config2 = EncryptionConfig { key: key2, ..Default::default() };
-                
+
                 let ops1 = EncryptionOperations::new(config1)?;
                 let ops2 = EncryptionOperations::new(config2)?;
-                
+
                 let encrypted1 = ops1.encrypt(&plaintext, None)?;
                 let encrypted2 = ops2.encrypt(&plaintext, None)?;
-                
+
                 // Different keys should produce different ciphertext
-                prop_assert_ne!(encrypted1.ciphertext, encrypted2.ciphertext);
-                
+                let encrypted1_ciphertext = encrypted1.ciphertext.clone();
+                let encrypted2_ciphertext = encrypted2.ciphertext.clone();
+                prop_assert_ne!(encrypted1_ciphertext, encrypted2_ciphertext);
+
                 // Decryption with wrong key should fail
                 prop_assert!(ops1.decrypt(&encrypted2, None).is_err());
                 prop_assert!(ops2.decrypt(&encrypted1, None).is_err());

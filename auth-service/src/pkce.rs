@@ -308,7 +308,9 @@ mod tests {
         assert!(manager.validate_verifier(&too_long).is_err());
 
         // Invalid characters
-        assert!(manager.validate_verifier("invalid+characters/here").is_err());
+        assert!(manager
+            .validate_verifier("invalid+characters/here")
+            .is_err());
     }
 
     #[tokio::test]
@@ -403,13 +405,13 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_expired_challenges() {
         let manager = PkceManager::with_lifetime(1); // 1 second expiration
-        
+
         // Store some challenges
         for i in 0..3 {
             let auth_code = format!("code_{i}");
             let verifier = PkceManager::generate_code_verifier();
             let challenge = manager.compute_s256_challenge(&verifier);
-            
+
             assert!(manager
                 .store_challenge(
                     &auth_code,

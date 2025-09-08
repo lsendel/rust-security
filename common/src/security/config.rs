@@ -136,7 +136,7 @@ impl UnifiedSecurityConfig {
         // Security Headers Configuration
         let headers = SecurityHeaders {
             enabled: Self::parse_env("SECURITY_HEADERS_ENABLED", true)?,
-            hsts_max_age_seconds: Self::parse_env("HSTS_MAX_AGE_SECONDS", 31536000)?,
+            hsts_max_age_seconds: Self::parse_env("HSTS_MAX_AGE_SECONDS", 31_536_000)?,
             content_type_options_nosniff: Self::parse_env("CONTENT_TYPE_OPTIONS_NOSNIFF", true)?,
             frame_options: Self::parse_env("FRAME_OPTIONS", FrameOptions::Deny)?,
             xss_protection: Self::parse_env("XSS_PROTECTION", true)?,

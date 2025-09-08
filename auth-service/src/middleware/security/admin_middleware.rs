@@ -863,7 +863,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_replay_protection_integration() {
-        use crate::admin_replay_protection::ReplayProtection;
+        use crate::middleware::security::admin_replay_protection::ReplayProtection;
 
         let config = AdminAuthConfig {
             require_request_signing: true,

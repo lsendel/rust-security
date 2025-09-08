@@ -11,7 +11,9 @@ use std::net::IpAddr;
 use tracing::debug;
 use url::Url;
 
-use crate::application::oauth::oauth_client_registration::{ClientRegistrationError, ClientRegistrationRequest};
+use crate::application::oauth::oauth_client_registration::{
+    ClientRegistrationError, ClientRegistrationRequest,
+};
 
 /// Comprehensive OAuth client registration policy
 #[derive(Debug, Clone, Serialize, Deserialize)]

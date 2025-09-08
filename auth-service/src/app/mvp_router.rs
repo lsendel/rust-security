@@ -57,11 +57,11 @@ pub fn create_mvp_router(_container: AppContainer) -> Router<AuthState> {
             "/oauth/token",
             post(crate::application::auth::auth_api::token),
         )
-        // .route("/oauth/introspect", post(crate::application::auth::auth_api::introspect)) // TODO: Implement introspect endpoint
+        .route("/oauth/introspect", post(crate::application::auth::auth_api::introspect))
         // === Administrative Endpoints ===
-        // .route("/admin/revoke", post(handlers::admin::revoke_token)) // TODO: Implement admin handlers
+        .route("/admin/revoke", post(crate::application::auth::auth_api::revoke_token))
         // === Discovery Endpoints ===
-        // .route("/.well-known/jwks.json", get(handlers::jwks::public_keys)) // TODO: Implement JWKS handlers
+        .route("/.well-known/jwks.json", get(crate::application::auth::auth_api::public_keys))
         // === Health & Monitoring ===
         .route("/health", get(mvp_health_check))
         .route("/metrics", get(mvp_metrics_endpoint))

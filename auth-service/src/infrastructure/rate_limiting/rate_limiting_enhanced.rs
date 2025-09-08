@@ -121,6 +121,154 @@ pub struct EnhancedRateLimitConfig {
     pub adaptive_cleanup_threshold: usize,
 }
 
+/// Builder for EnhancedRateLimitConfig to simplify complex configuration
+#[derive(Debug, Clone)]
+pub struct EnhancedRateLimitConfigBuilder {
+    config: EnhancedRateLimitConfig,
+}
+
+impl EnhancedRateLimitConfigBuilder {
+    /// Create a new builder with default values
+    pub fn new() -> Self {
+        Self {
+            config: EnhancedRateLimitConfig::default(),
+        }
+    }
+
+    /// Set global rate limits
+    pub fn global_limits(
+        mut self,
+        requests_per_minute: u32,
+        requests_per_hour: u32,
+        burst: u32,
+    ) -> Self {
+        self.config.global_requests_per_minute = requests_per_minute;
+        self.config.global_requests_per_hour = requests_per_hour;
+        self.config.global_burst = burst;
+        self
+    }
+
+    /// Set per-IP rate limits
+    pub fn per_ip_limits(
+        mut self,
+        requests_per_minute: u32,
+        requests_per_hour: u32,
+        requests_per_day: u32,
+        burst: u32,
+    ) -> Self {
+        self.config.per_ip_requests_per_minute = requests_per_minute;
+        self.config.per_ip_requests_per_hour = requests_per_hour;
+        self.config.per_ip_requests_per_day = requests_per_day;
+        self.config.per_ip_burst = burst;
+        self
+    }
+
+    /// Set endpoint-specific limits
+    pub fn oauth_limits(mut self, token: u32, authorize: u32, introspect: u32) -> Self {
+        self.config.oauth_token_requests_per_minute = token;
+        self.config.oauth_authorize_requests_per_minute = authorize;
+        self.config.oauth_introspect_requests_per_minute = introspect;
+        self
+    }
+
+    /// Enable adaptive rate limiting with parameters
+    pub fn adaptive_limiting(
+        mut self,
+        enabled: bool,
+        learning_window_hours: u32,
+        adjustment_threshold: f64,
+    ) -> Self {
+        self.config.enable_adaptive_limits = enabled;
+        self.config.adaptive_learning_window_hours = learning_window_hours;
+        self.config.adaptive_adjustment_threshold = adjustment_threshold;
+        self
+    }
+
+    /// Configure machine learning features
+    pub fn machine_learning(
+        mut self,
+        enabled: bool,
+        update_frequency_minutes: u32,
+        confidence_threshold: f64,
+    ) -> Self {
+        self.config.enable_ml_prediction = enabled;
+        self.config.ml_model_update_frequency_minutes = update_frequency_minutes;
+        self.config.ml_confidence_threshold = confidence_threshold;
+        self
+    }
+
+    /// Configure behavioral analysis
+    pub fn behavioral_analysis(
+        mut self,
+        enabled: bool,
+        retention_days: u32,
+        deviation_threshold: f64,
+    ) -> Self {
+        self.config.enable_behavioral_analysis = enabled;
+        self.config.behavioral_baselines_retention_days = retention_days;
+        self.config.behavioral_deviation_threshold = deviation_threshold;
+        self
+    }
+
+    /// Set security features
+    pub fn security_settings(
+        mut self,
+        ban_threshold: u32,
+        ban_duration_minutes: u32,
+        progressive_delays: bool,
+    ) -> Self {
+        self.config.ban_threshold = ban_threshold;
+        self.config.ban_duration_minutes = ban_duration_minutes;
+        self.config.progressive_delays_enabled = progressive_delays;
+        self
+    }
+
+    /// Configure IP filtering
+    pub fn ip_filtering(mut self, enable_allowlist: bool, enable_banlist: bool) -> Self {
+        self.config.enable_allowlist = enable_allowlist;
+        self.config.enable_banlist = enable_banlist;
+        self
+    }
+
+    /// Add allowed IPs
+    pub fn add_allowed_ips(mut self, ips: Vec<IpAddr>) -> Self {
+        for ip in ips {
+            self.config.allowlist_ips.insert(ip);
+        }
+        self
+    }
+
+    /// Add banned IPs
+    pub fn add_banned_ips(mut self, ips: Vec<IpAddr>) -> Self {
+        for ip in ips {
+            self.config.banlist_ips.insert(ip);
+        }
+        self
+    }
+
+    /// Set cleanup and maintenance settings
+    pub fn maintenance_settings(
+        mut self,
+        cleanup_interval_seconds: u64,
+        max_tracked_ips: usize,
+    ) -> Self {
+        self.config.cleanup_interval_seconds = cleanup_interval_seconds;
+        self.config.max_tracked_ips = max_tracked_ips;
+        self
+    }
+
+    /// Build the final configuration
+    pub fn build(self) -> EnhancedRateLimitConfig {
+        self.config
+    }
+}
+
+impl Default for EnhancedRateLimitConfigBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Default for EnhancedRateLimitConfig {
     fn default() -> Self {
         Self {
@@ -309,7 +457,7 @@ pub struct EnhancedRateLimiter {
     /// Threat intelligence cache
     threat_intel_cache: Arc<RwLock<HashMap<IpAddr, ThreatIntelligence>>>,
     /// ML model (mock implementation)
-    ml_model: Arc<MlModel>,
+    ml_model: Arc<tokio::sync::Mutex<MlModel>>,
     /// Cleanup task handle
     cleanup_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     /// Running flag
@@ -381,7 +529,7 @@ impl EnhancedRateLimiter {
             metrics: Arc::new(EnhancedRateLimitMetrics::default()),
             behavioral_baselines: Arc::new(RwLock::new(HashMap::new())),
             threat_intel_cache: Arc::new(RwLock::new(HashMap::new())),
-            ml_model: Arc::new(MlModel::new()),
+            ml_model: Arc::new(tokio::sync::Mutex::new(MlModel::new())),
             cleanup_handle: Arc::new(Mutex::new(None)),
             is_running: Arc::new(AtomicBool::new(false)),
         };
@@ -519,8 +667,9 @@ impl EnhancedRateLimiter {
                 // In a real implementation, this would gather training data and update the model
                 debug!("ML model training cycle - updating model");
 
-                let model = ml_model.as_ref().clone();
-                model.train(Vec::new()).await;
+                if let Ok(mut model) = ml_model.try_lock() {
+                    model.train(Vec::new()).await;
+                }
             }
         });
     }
@@ -563,53 +712,88 @@ impl EnhancedRateLimiter {
     /// Check rate limit with enhanced adaptive thresholds
     pub async fn check_rate_limit(
         &self,
-        _key: &str,
+        key: &str,
         client_ip: Option<IpAddr>,
         client_id: Option<&str>,
         endpoint: &str,
         user_agent: Option<&str>,
     ) -> EnhancedRateLimitResult {
-        // Update metrics
-        self.metrics.total_requests.fetch_add(1, Ordering::Relaxed);
+        self.increment_total_requests();
 
-        // Check if system is running
+        if let Some(early_return) = self.check_system_preconditions(client_ip).await {
+            return early_return;
+        }
+
+        let mut entries = self.entries.write().await;
+        let entry = self.get_or_create_entry(&mut entries, key, endpoint);
+
+        if let Some(ban_result) = self.check_entry_ban_status(entry) {
+            return ban_result;
+        }
+
+        self.refill_tokens(entry, endpoint);
+        let effective_limit = self
+            .calculate_effective_limit(entry, client_ip, client_id, endpoint, user_agent)
+            .await;
+
+        self.process_rate_limit_decision(entry, effective_limit)
+    }
+
+    /// Update total requests metric
+    fn increment_total_requests(&self) {
+        self.metrics.total_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Check system preconditions (running state and IP restrictions)
+    async fn check_system_preconditions(
+        &self,
+        client_ip: Option<IpAddr>,
+    ) -> Option<EnhancedRateLimitResult> {
         if !self.is_running.load(Ordering::Relaxed) {
             debug!("Rate limiter not running, allowing request");
             self.metrics
                 .allowed_requests
                 .fetch_add(1, Ordering::Relaxed);
-            return EnhancedRateLimitResult::Allowed;
+            return Some(EnhancedRateLimitResult::Allowed);
         }
 
-        // Check IP allowlist/banlist
         if let Some(ip) = client_ip {
             if self.is_ip_banned(ip).await {
                 self.metrics
                     .blocked_requests
                     .fetch_add(1, Ordering::Relaxed);
-                return EnhancedRateLimitResult::Blocked {
+                return Some(EnhancedRateLimitResult::Blocked {
                     reason: "IP is banned".to_string(),
                     duration_minutes: self.config.ban_duration_minutes,
-                };
+                });
             }
 
             if !self.is_ip_allowed(ip).await {
                 self.metrics
                     .blocked_requests
                     .fetch_add(1, Ordering::Relaxed);
-                return EnhancedRateLimitResult::Blocked {
+                return Some(EnhancedRateLimitResult::Blocked {
                     reason: "IP not in allowlist".to_string(),
                     duration_minutes: 0,
-                };
+                });
             }
         }
 
-        // Get or create rate limit entry
-        let mut entries = self.entries.write().await;
-        let entry = entries
+        None
+    }
+
+    /// Get or create a rate limit entry for the given key
+    fn get_or_create_entry<'a>(
+        &self,
+        entries: &'a mut HashMap<String, EnhancedRateLimitEntry>,
+        key: &str,
+        endpoint: &str,
+    ) -> &'a mut EnhancedRateLimitEntry {
+        let base_limit = self.get_base_limit(endpoint);
+        entries
             .entry(key.to_string())
-            .or_insert_with(|| EnhancedRateLimitEntry {
-                tokens: self.get_base_limit(endpoint),
+            .or_insert_with(move || EnhancedRateLimitEntry {
+                tokens: base_limit,
                 last_refill: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or(Duration::from_secs(0))
@@ -623,9 +807,14 @@ impl EnhancedRateLimiter {
                 last_violation: 0,
                 ban_expires: None,
                 behavioral_baseline: None,
-            });
+            })
+    }
 
-        // Check if banned
+    /// Check if entry is currently banned
+    fn check_entry_ban_status(
+        &self,
+        entry: &mut EnhancedRateLimitEntry,
+    ) -> Option<EnhancedRateLimitResult> {
         if let Some(ban_expires) = entry.ban_expires {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -636,83 +825,94 @@ impl EnhancedRateLimiter {
                 self.metrics
                     .blocked_requests
                     .fetch_add(1, Ordering::Relaxed);
-                return EnhancedRateLimitResult::Blocked {
+                return Some(EnhancedRateLimitResult::Blocked {
                     reason: "Account temporarily banned".to_string(),
                     duration_minutes: ((ban_expires - now) / 60) as u32,
-                };
+                });
             } else {
                 // Ban expired, clear it
                 entry.ban_expires = None;
             }
         }
+        None
+    }
 
-        // Refill tokens
-        self.refill_tokens(entry, endpoint);
-
-        // Calculate effective limit based on adaptive factors
-        let effective_limit = self
-            .calculate_effective_limit(entry, client_ip, client_id, endpoint, user_agent)
-            .await;
-
-        // Check if request is allowed
+    /// Process the final rate limiting decision
+    fn process_rate_limit_decision(
+        &self,
+        entry: &mut EnhancedRateLimitEntry,
+        effective_limit: u32,
+    ) -> EnhancedRateLimitResult {
         if entry.tokens > 0 {
-            entry.tokens -= 1;
-            entry.request_history.push(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or(Duration::from_secs(0))
-                    .as_secs(),
-            );
-
-            // Keep only recent history
-            self.prune_request_history(entry);
-
-            self.metrics
-                .allowed_requests
-                .fetch_add(1, Ordering::Relaxed);
-
-            // Update trust score for good behavior
-            if entry.trust_score < 1.0 {
-                entry.trust_score =
-                    (entry.trust_score + self.config.behavioral_trust_decay_rate).min(1.0);
-            }
-
-            EnhancedRateLimitResult::Allowed
+            self.handle_allowed_request(entry)
         } else {
-            // Rate limited - handle adaptive response
-            self.metrics
-                .rate_limited_requests
-                .fetch_add(1, Ordering::Relaxed);
+            self.handle_rate_limited_request(entry, effective_limit)
+        }
+    }
 
-            // Update violation count and trust score
-            entry.violation_count += 1;
-            entry.last_violation = SystemTime::now()
+    /// Handle an allowed request
+    fn handle_allowed_request(
+        &self,
+        entry: &mut EnhancedRateLimitEntry,
+    ) -> EnhancedRateLimitResult {
+        entry.tokens -= 1;
+        entry.request_history.push(
+            SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or(Duration::from_secs(0))
-                .as_secs();
+                .as_secs(),
+        );
 
-            // Decrease trust score for violations
-            entry.trust_score = (entry.trust_score - 0.1).max(0.1);
+        self.prune_request_history(entry);
+        self.metrics
+            .allowed_requests
+            .fetch_add(1, Ordering::Relaxed);
 
-            // Apply progressive penalties
-            if self.config.progressive_delays_enabled {
-                self.apply_progressive_penalty(entry);
-            }
+        // Update trust score for good behavior
+        if entry.trust_score < 1.0 {
+            entry.trust_score =
+                (entry.trust_score + self.config.behavioral_trust_decay_rate).min(1.0);
+        }
 
-            // Check for automatic banning
-            if entry.violation_count >= self.config.ban_threshold {
-                self.apply_automatic_ban(entry);
-            }
+        EnhancedRateLimitResult::Allowed
+    }
 
-            // Calculate retry after time
-            let retry_after = self.calculate_retry_after(entry, effective_limit);
+    /// Handle a rate-limited request
+    fn handle_rate_limited_request(
+        &self,
+        entry: &mut EnhancedRateLimitEntry,
+        effective_limit: u32,
+    ) -> EnhancedRateLimitResult {
+        self.metrics
+            .rate_limited_requests
+            .fetch_add(1, Ordering::Relaxed);
 
-            EnhancedRateLimitResult::RateLimited {
-                retry_after,
-                limit: effective_limit,
-                remaining: entry.tokens,
-                reset_time: entry.last_refill + self.config.window_duration_secs,
-            }
+        // Update violation metrics
+        entry.violation_count += 1;
+        entry.last_violation = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+
+        // Decrease trust score for violations
+        entry.trust_score = (entry.trust_score - 0.1).max(0.1);
+
+        // Apply penalties and potential ban
+        if self.config.progressive_delays_enabled {
+            self.apply_progressive_penalty(entry);
+        }
+
+        if entry.violation_count >= self.config.ban_threshold {
+            self.apply_automatic_ban(entry);
+        }
+
+        let retry_after = self.calculate_retry_after(entry, effective_limit);
+
+        EnhancedRateLimitResult::RateLimited {
+            retry_after,
+            limit: effective_limit,
+            remaining: entry.tokens,
+            reset_time: entry.last_refill + self.config.window_duration_secs,
         }
     }
 
@@ -812,10 +1012,14 @@ impl EnhancedRateLimiter {
             let features = self
                 .extract_ml_features(entry, client_ip, client_id, endpoint)
                 .await;
-            let prediction = self.ml_model.predict_adjustment(&features);
-            if prediction > self.config.ml_confidence_threshold {
-                effective_limit *= prediction;
-                self.metrics.ml_predictions.fetch_add(1, Ordering::Relaxed);
+
+            // Try to get ML prediction without blocking
+            if let Ok(model) = self.ml_model.try_lock() {
+                let prediction = model.predict_adjustment(&features);
+                if prediction > self.config.ml_confidence_threshold {
+                    effective_limit *= prediction;
+                    self.metrics.ml_predictions.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
 
@@ -862,7 +1066,7 @@ impl EnhancedRateLimiter {
     async fn build_behavioral_baseline(
         &self,
         entry: &mut EnhancedRateLimitEntry,
-        client_id: Option<&str>,
+        _client_id: Option<&str>,
     ) {
         if entry.request_history.len() < 10 {
             // Need more data to build baseline
@@ -1240,13 +1444,13 @@ pub async fn enhanced_rate_limit_middleware(
         .map(|s| s.to_string());
 
     let endpoint = request.uri().path().to_string();
-    let user_agent = request
+    let _user_agent = request
         .headers()
         .get("user-agent")
         .and_then(|v| v.to_str().ok());
 
     // Generate rate limiting key
-    let key = format!(
+    let _key = format!(
         "rl:{}:{}:{}",
         client_ip
             .as_ref()
@@ -1313,36 +1517,215 @@ pub async fn enhanced_rate_limit_middleware(
 /// Convenience function to create default enhanced rate limiter
 #[must_use]
 pub fn create_default_enhanced_rate_limiter() -> EnhancedRateLimiter {
-    let mut config = EnhancedRateLimitConfig::default();
+    let mut builder = EnhancedRateLimitConfigBuilder::new();
 
     // Override with environment variables if available
     if let Ok(global_rpm) = std::env::var("GLOBAL_REQUESTS_PER_MINUTE") {
         if let Ok(val) = global_rpm.parse::<u32>() {
-            config.global_requests_per_minute = val;
+            builder = builder.global_limits(val, 100_000, 100);
         }
     }
 
     if let Ok(ip_rpm) = std::env::var("PER_IP_REQUESTS_PER_MINUTE") {
         if let Ok(val) = ip_rpm.parse::<u32>() {
-            config.per_ip_requests_per_minute = val;
+            builder = builder.per_ip_limits(val, 1000, 10000, 20);
         }
     }
 
     if let Ok(enable_adaptive) = std::env::var("ENABLE_ADAPTIVE_LIMITS") {
-        config.enable_adaptive_limits =
-            enable_adaptive == "1" || enable_adaptive.to_lowercase() == "true";
+        let enabled = enable_adaptive == "1" || enable_adaptive.to_lowercase() == "true";
+        builder = builder.adaptive_limiting(enabled, 24, 0.7);
     }
 
     if let Ok(enable_ml) = std::env::var("ENABLE_ML_PREDICTION") {
-        config.enable_ml_prediction = enable_ml == "1" || enable_ml.to_lowercase() == "true";
+        let enabled = enable_ml == "1" || enable_ml.to_lowercase() == "true";
+        builder = builder.machine_learning(enabled, 30, 0.8);
     }
 
     if let Ok(enable_behavioral) = std::env::var("ENABLE_BEHAVIORAL_ANALYSIS") {
-        config.enable_behavioral_analysis =
-            enable_behavioral == "1" || enable_behavioral.to_lowercase() == "true";
+        let enabled = enable_behavioral == "1" || enable_behavioral.to_lowercase() == "true";
+        builder = builder.behavioral_analysis(enabled, 30, 0.6);
     }
 
+    EnhancedRateLimiter::new(builder.build())
+}
+
+/// Create a production-ready rate limiter configuration
+pub fn create_production_rate_limiter() -> EnhancedRateLimiter {
+    let config = EnhancedRateLimitConfigBuilder::new()
+        .global_limits(50_000, 500_000, 200)
+        .per_ip_limits(200, 2000, 20_000, 50)
+        .oauth_limits(60, 120, 400)
+        .adaptive_limiting(true, 24, 0.8)
+        .machine_learning(true, 15, 0.85)
+        .behavioral_analysis(true, 30, 0.7)
+        .security_settings(10, 120, true)
+        .ip_filtering(false, true)
+        .maintenance_settings(300, 500_000)
+        .build();
+
     EnhancedRateLimiter::new(config)
+}
+
+/// Create a development-friendly rate limiter configuration
+pub fn create_development_rate_limiter() -> EnhancedRateLimiter {
+    let config = EnhancedRateLimitConfigBuilder::new()
+        .global_limits(1000, 10_000, 50)
+        .per_ip_limits(60, 600, 6000, 20)
+        .oauth_limits(30, 60, 200)
+        .adaptive_limiting(false, 1, 0.5)
+        .machine_learning(false, 60, 0.7)
+        .behavioral_analysis(false, 7, 0.5)
+        .security_settings(20, 30, false)
+        .ip_filtering(false, false)
+        .maintenance_settings(60, 10_000)
+        .build();
+
+    EnhancedRateLimiter::new(config)
+}
+
+/// Tests for EnhancedRateLimitConfigBuilder
+#[cfg(test)]
+mod builder_tests {
+    use super::*;
+
+    #[test]
+    fn test_builder_default_config() {
+        let config = EnhancedRateLimitConfigBuilder::new().build();
+        assert_eq!(config.global_requests_per_minute, 1000);
+        assert_eq!(config.per_ip_requests_per_minute, 60);
+        assert!(!config.enable_adaptive_limits);
+    }
+
+    #[test]
+    fn test_builder_global_limits() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .global_limits(5000, 50000, 100)
+            .build();
+
+        assert_eq!(config.global_requests_per_minute, 5000);
+        assert_eq!(config.global_requests_per_hour, 50000);
+        assert_eq!(config.global_burst, 100);
+    }
+
+    #[test]
+    fn test_builder_per_ip_limits() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .per_ip_limits(100, 1000, 10000, 20)
+            .build();
+
+        assert_eq!(config.per_ip_requests_per_minute, 100);
+        assert_eq!(config.per_ip_requests_per_hour, 1000);
+        assert_eq!(config.per_ip_requests_per_day, 10000);
+        assert_eq!(config.per_ip_burst, 20);
+    }
+
+    #[test]
+    fn test_builder_oauth_limits() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .oauth_limits(60, 120, 400)
+            .build();
+
+        assert_eq!(config.oauth_token_requests_per_minute, 60);
+        assert_eq!(config.oauth_authorize_requests_per_minute, 120);
+        assert_eq!(config.oauth_introspect_requests_per_minute, 400);
+    }
+
+    #[test]
+    fn test_builder_adaptive_limiting() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .adaptive_limiting(true, 48, 0.8)
+            .build();
+
+        assert!(config.enable_adaptive_limits);
+        assert_eq!(config.adaptive_learning_window_hours, 48);
+        assert_eq!(config.adaptive_adjustment_threshold, 0.8);
+    }
+
+    #[test]
+    fn test_builder_machine_learning() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .machine_learning(true, 45, 0.9)
+            .build();
+
+        assert!(config.enable_ml_prediction);
+        assert_eq!(config.ml_model_update_frequency_minutes, 45);
+        assert_eq!(config.ml_confidence_threshold, 0.9);
+    }
+
+    #[test]
+    fn test_builder_behavioral_analysis() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .behavioral_analysis(true, 60, 0.7)
+            .build();
+
+        assert!(config.enable_behavioral_analysis);
+        assert_eq!(config.behavioral_baselines_retention_days, 60);
+        assert_eq!(config.behavioral_deviation_threshold, 0.7);
+    }
+
+    #[test]
+    fn test_builder_security_settings() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .security_settings(15, 180, true)
+            .build();
+
+        assert_eq!(config.ban_threshold, 15);
+        assert_eq!(config.ban_duration_minutes, 180);
+        assert!(config.progressive_delays_enabled);
+    }
+
+    #[test]
+    fn test_builder_ip_filtering() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .ip_filtering(true, true)
+            .build();
+
+        assert!(config.enable_allowlist);
+        assert!(config.enable_banlist);
+    }
+
+    #[test]
+    fn test_builder_add_allowed_ips() {
+        use std::net::IpAddr;
+        use std::str::FromStr;
+
+        let ip1 = IpAddr::from_str("192.168.1.1").unwrap();
+        let ip2 = IpAddr::from_str("10.0.0.1").unwrap();
+
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .add_allowed_ips(vec![ip1, ip2])
+            .build();
+
+        assert!(config.allowlist_ips.contains(&ip1));
+        assert!(config.allowlist_ips.contains(&ip2));
+    }
+
+    #[test]
+    fn test_builder_maintenance_settings() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .maintenance_settings(600, 1000000)
+            .build();
+
+        assert_eq!(config.cleanup_interval_seconds, 600);
+        assert_eq!(config.max_tracked_ips, 1000000);
+    }
+
+    #[test]
+    fn test_builder_chaining() {
+        let config = EnhancedRateLimitConfigBuilder::new()
+            .global_limits(10000, 100000, 500)
+            .per_ip_limits(200, 2000, 20000, 100)
+            .adaptive_limiting(true, 24, 0.75)
+            .security_settings(5, 60, true)
+            .build();
+
+        assert_eq!(config.global_requests_per_minute, 10000);
+        assert_eq!(config.per_ip_requests_per_minute, 200);
+        assert!(config.enable_adaptive_limits);
+        assert_eq!(config.ban_threshold, 5);
+        assert!(config.progressive_delays_enabled);
+    }
 }
 
 #[cfg(test)]

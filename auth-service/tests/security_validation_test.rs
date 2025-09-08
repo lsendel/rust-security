@@ -3,9 +3,9 @@
 //! This module contains security-focused tests that validate the fixes
 //! implemented in the code review process.
 
-use axum::Extension;
 use auth_service::auth_api::AuthState;
 use auth_service::auth_api::*;
+use axum::Extension;
 use chrono::Utc;
 use common::crypto::encryption::EncryptionOperations;
 use common::crypto::jwt::JwtConfig;
@@ -259,11 +259,8 @@ async fn test_security_integration_full_flow() {
         name: "Security Test User".to_string(),
     };
 
-    let register_result = register(
-        Extension(auth_state.clone()),
-        axum::Json(register_request),
-    )
-    .await;
+    let register_result =
+        register(Extension(auth_state.clone()), axum::Json(register_request)).await;
 
     assert!(register_result.is_ok(), "User registration should succeed");
 
@@ -273,11 +270,7 @@ async fn test_security_integration_full_flow() {
         password: "SecurePassword123!".to_string(),
     };
 
-    let login_result = login(
-        Extension(auth_state.clone()),
-        axum::Json(login_request),
-    )
-    .await;
+    let login_result = login(Extension(auth_state.clone()), axum::Json(login_request)).await;
 
     match login_result {
         Ok((headers, response)) => {

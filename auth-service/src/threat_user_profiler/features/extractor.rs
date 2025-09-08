@@ -422,7 +422,6 @@ mod tests {
     use crate::threat_user_profiler::types::GeoLocation;
     use chrono::Utc;
 
-    
     #[tokio::test]
     async fn test_feature_extraction() {
         let config = BehavioralFeatureConfig::default();

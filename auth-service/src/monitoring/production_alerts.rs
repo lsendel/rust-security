@@ -496,36 +496,42 @@ impl ProductionMonitor {
     pub fn get_production_status(&self) -> ProductionStatus {
         let alerts = match self.alerts.lock() {
             Ok(guard) => guard,
-            Err(_) => return ProductionStatus {
-                overall_health: SystemHealth::Critical,
-                sla_metrics: SlaMetrics::default(),
-                active_alerts: 0,
-                critical_alerts: 0,
-                services_healthy: 0,
-                services_total: 0,
-            },
+            Err(_) => {
+                return ProductionStatus {
+                    overall_health: SystemHealth::Critical,
+                    sla_metrics: SlaMetrics::default(),
+                    active_alerts: 0,
+                    critical_alerts: 0,
+                    services_healthy: 0,
+                    services_total: 0,
+                }
+            }
         };
         let metrics = match self.metrics.lock() {
             Ok(guard) => guard,
-            Err(_) => return ProductionStatus {
-                overall_health: SystemHealth::Critical,
-                sla_metrics: SlaMetrics::default(),
-                active_alerts: 0,
-                critical_alerts: 0,
-                services_healthy: 0,
-                services_total: 0,
-            },
+            Err(_) => {
+                return ProductionStatus {
+                    overall_health: SystemHealth::Critical,
+                    sla_metrics: SlaMetrics::default(),
+                    active_alerts: 0,
+                    critical_alerts: 0,
+                    services_healthy: 0,
+                    services_total: 0,
+                }
+            }
         };
         let health_checks = match self.health_checks.lock() {
             Ok(guard) => guard,
-            Err(_) => return ProductionStatus {
-                overall_health: SystemHealth::Critical,
-                sla_metrics: SlaMetrics::default(),
-                active_alerts: 0,
-                critical_alerts: 0,
-                services_healthy: 0,
-                services_total: 0,
-            },
+            Err(_) => {
+                return ProductionStatus {
+                    overall_health: SystemHealth::Critical,
+                    sla_metrics: SlaMetrics::default(),
+                    active_alerts: 0,
+                    critical_alerts: 0,
+                    services_healthy: 0,
+                    services_total: 0,
+                }
+            }
         };
 
         let critical_alerts = alerts

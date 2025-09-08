@@ -1,9 +1,9 @@
+use chrono::Utc;
+use common::crypto::{JwtAlgorithm, JwtConfig};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use common::crypto::{JwtConfig, JwtAlgorithm};
-use chrono::Utc;
-use once_cell::sync::Lazy;
 use std::time::Duration;
 
 /// Secure JWT claims with comprehensive validation
@@ -283,11 +283,14 @@ pub fn create_id_token_validator(jwt_config: &JwtConfig) -> Validation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{encode, Header, EncodingKey};
-    use std::time::{SystemTime, Duration};
+    use jsonwebtoken::{encode, EncodingKey, Header};
+    use std::time::{Duration, SystemTime};
 
     fn create_test_claims(exp_offset_secs: i64, iat_offset_secs: i64) -> SecureJwtClaims {
-        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         SecureJwtClaims {
             sub: "test-user".to_string(),
             iss: "test-issuer".to_string(),
@@ -307,7 +310,12 @@ mod tests {
     fn test_secure_jwt_validation_rejects_weak_algorithms() {
         let claims = create_test_claims(3600, 0);
         let header = Header::new(Algorithm::HS256);
-        let token = encode(&header, &claims, &EncodingKey::from_secret("secret".as_ref())).unwrap();
+        let token = encode(
+            &header,
+            &claims,
+            &EncodingKey::from_secret("secret".as_ref()),
+        )
+        .unwrap();
         let decoding_key = DecodingKey::from_secret("secret".as_ref());
         let jwt_config = JwtConfig {
             secret: "secret".to_string(),
@@ -321,7 +329,8 @@ mod tests {
             max_keys: 3,
             enable_jwks: true,
         };
-        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        let result =
+            validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
         assert!(result.is_err());
     }
 
@@ -346,14 +355,16 @@ mod tests {
         let claims = create_test_claims(-3600, -7200);
         let header = Header::new(Algorithm::HS256);
         let token = encode(&header, &claims, &encoding_key).unwrap();
-        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        let result =
+            validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
         assert!(result.is_err());
 
         // Token issued in the future
         let claims = create_test_claims(3600, 3600);
         let header = Header::new(Algorithm::HS256);
         let token = encode(&header, &claims, &encoding_key).unwrap();
-        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        let result =
+            validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
         assert!(result.is_err());
     }
 
@@ -378,7 +389,8 @@ mod tests {
         let claims = create_test_claims(3600, 0);
         let header = Header::new(Algorithm::HS256);
         let token = encode(&header, &claims, &encoding_key).unwrap();
-        let result = validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
+        let result =
+            validate_jwt_secure(&token, &decoding_key, TokenType::AccessToken, &jwt_config);
         assert!(result.is_ok());
 
         // ID token missing nonce

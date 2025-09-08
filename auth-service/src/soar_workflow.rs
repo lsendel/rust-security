@@ -711,6 +711,13 @@ impl WorkflowOrchestrator {
     }
 
     /// Execute a workflow
+    ///
+    /// Steps:
+    /// 1. Create execution context for the workflow instance
+    /// 2. Create workflow instance and register it as active
+    /// 3. Build execution request and queue it for processing
+    /// 4. Publish workflow triggered event for observability
+    /// 5. Return the workflow instance ID
     #[instrument(skip(self, playbook, inputs, context))]
     pub async fn execute_workflow(
         &self,
@@ -718,19 +725,23 @@ impl WorkflowOrchestrator {
         inputs: HashMap<String, Value>,
         context: HashMap<String, Value>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        // Step 1: Create execution context
         let instance_id = Uuid::new_v4().to_string();
-        
         let execution_context = self.create_execution_context(&instance_id, &inputs, &context)?;
+
+        // Step 2: Create workflow instance
         let instance = self.create_workflow_instance(&instance_id, &playbook, &inputs, &context);
-        
         self.active_workflows.insert(instance_id.clone(), instance);
-        
+
+        // Step 3: Build and queue execution request
         let execution_request = self.create_execution_request(instance_id.clone(), playbook, inputs, context);
         self.queue_execution_request(execution_request).await;
-        
+
+        // Step 4: Publish workflow triggered event
         self.publish_workflow_event(&instance_id, &playbook.id).await;
-        
+
         info!("Queued workflow execution: {}", instance_id);
+        // Step 5: Return instance ID
         Ok(instance_id)
     }
 

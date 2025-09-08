@@ -11,19 +11,19 @@ use std::collections::HashMap;
 pub struct SecurityHardeningConfig {
     /// Network security settings
     pub network: NetworkSecurityConfig,
-    
+
     /// Authentication hardening
     pub authentication: AuthenticationHardeningConfig,
-    
+
     /// Session management hardening
     pub session: SessionHardeningConfig,
-    
+
     /// API security hardening
     pub api: ApiSecurityConfig,
-    
+
     /// Monitoring and alerting
     pub monitoring: MonitoringConfig,
-    
+
     /// Compliance requirements
     pub compliance: ComplianceConfig,
 }
@@ -33,28 +33,28 @@ pub struct SecurityHardeningConfig {
 pub struct NetworkSecurityConfig {
     /// Enable TLS 1.3 only
     pub tls_1_3_only: bool,
-    
+
     /// Require perfect forward secrecy
     pub require_pfs: bool,
-    
+
     /// Enable HSTS with preload
     pub hsts_preload: bool,
-    
+
     /// HSTS max age in seconds
     pub hsts_max_age: u64,
-    
+
     /// Enable certificate pinning
     pub cert_pinning: bool,
-    
+
     /// Allowed TLS cipher suites
     pub allowed_ciphers: Vec<String>,
-    
+
     /// Enable OCSP stapling
     pub ocsp_stapling: bool,
-    
+
     /// IP allowlist for admin endpoints
     pub admin_ip_allowlist: Vec<String>,
-    
+
     /// Rate limiting configuration
     pub rate_limiting: RateLimitingHardening,
 }
@@ -64,22 +64,22 @@ pub struct NetworkSecurityConfig {
 pub struct RateLimitingHardening {
     /// Global rate limit per IP per minute
     pub global_requests_per_minute: u32,
-    
+
     /// Authentication endpoint rate limit
     pub auth_requests_per_minute: u32,
-    
+
     /// Admin endpoint rate limit
     pub admin_requests_per_minute: u32,
-    
+
     /// API endpoint rate limit
     pub api_requests_per_minute: u32,
-    
+
     /// Enable adaptive rate limiting based on threat score
     pub adaptive_rate_limiting: bool,
-    
+
     /// Ban duration for rate limit violations (seconds)
     pub ban_duration_seconds: u64,
-    
+
     /// Enable distributed rate limiting
     pub distributed_limiting: bool,
 }
@@ -89,31 +89,31 @@ pub struct RateLimitingHardening {
 pub struct AuthenticationHardeningConfig {
     /// Require MFA for all accounts
     pub require_mfa_all_accounts: bool,
-    
+
     /// Require MFA for admin accounts
     pub require_mfa_admin: bool,
-    
+
     /// Maximum login attempts before lockout
     pub max_login_attempts: u32,
-    
+
     /// Account lockout duration (seconds)
     pub lockout_duration_seconds: u64,
-    
+
     /// Password policy enforcement
     pub password_policy: PasswordPolicyHardening,
-    
+
     /// JWT security hardening
     pub jwt_hardening: JwtHardeningConfig,
-    
+
     /// OAuth security hardening
     pub oauth_hardening: OAuthHardeningConfig,
-    
+
     /// Enable device fingerprinting
     pub device_fingerprinting: bool,
-    
+
     /// Enable geolocation-based restrictions
     pub geolocation_restrictions: bool,
-    
+
     /// Require hardware security keys for admin
     pub require_hardware_keys_admin: bool,
 }
@@ -123,22 +123,22 @@ pub struct AuthenticationHardeningConfig {
 pub struct PasswordPolicyHardening {
     /// Minimum password length
     pub min_length: u32,
-    
+
     /// Require password complexity
     pub require_complexity: bool,
-    
+
     /// Password history count
     pub password_history_count: u32,
-    
+
     /// Password expiration days (0 = no expiration)
     pub expiration_days: u32,
-    
+
     /// Check against breach databases
     pub check_breach_databases: bool,
-    
+
     /// Prohibit common passwords
     pub prohibit_common_passwords: bool,
-    
+
     /// Require password rotation for privileged accounts
     pub require_privileged_rotation: bool,
 }
@@ -148,25 +148,25 @@ pub struct PasswordPolicyHardening {
 pub struct JwtHardeningConfig {
     /// Short access token lifetime (seconds)
     pub access_token_lifetime: u64,
-    
+
     /// Refresh token lifetime (seconds)
     pub refresh_token_lifetime: u64,
-    
+
     /// Enable token binding
     pub enable_token_binding: bool,
-    
+
     /// Enable token encryption (JWE)
     pub enable_token_encryption: bool,
-    
+
     /// Require audience validation
     pub require_audience_validation: bool,
-    
+
     /// Enable issuer validation
     pub enable_issuer_validation: bool,
-    
+
     /// Rotate signing keys regularly
     pub rotate_signing_keys: bool,
-    
+
     /// Key rotation interval (hours)
     pub key_rotation_interval_hours: u64,
 }
@@ -176,19 +176,19 @@ pub struct JwtHardeningConfig {
 pub struct OAuthHardeningConfig {
     /// Require PKCE for all flows
     pub require_pkce: bool,
-    
+
     /// Require state parameter
     pub require_state: bool,
-    
+
     /// Enable dynamic client registration
     pub enable_dynamic_registration: bool,
-    
+
     /// Client authentication methods
     pub allowed_client_auth_methods: Vec<String>,
-    
+
     /// Authorization code lifetime (seconds)
     pub auth_code_lifetime: u64,
-    
+
     /// Require redirect URI exact match
     pub require_exact_redirect_match: bool,
 }
@@ -198,28 +198,28 @@ pub struct OAuthHardeningConfig {
 pub struct SessionHardeningConfig {
     /// Session timeout (seconds)
     pub session_timeout: u64,
-    
+
     /// Idle session timeout (seconds)
     pub idle_timeout: u64,
-    
+
     /// Maximum concurrent sessions per user
     pub max_concurrent_sessions: u32,
-    
+
     /// Session rotation interval (seconds)
     pub rotation_interval: u64,
-    
+
     /// Enable secure session cookies
     pub secure_cookies: bool,
-    
+
     /// Enable HttpOnly cookies
     pub httponly_cookies: bool,
-    
+
     /// Cookie SameSite attribute
     pub samesite_attribute: String,
-    
+
     /// Enable session fingerprinting
     pub enable_fingerprinting: bool,
-    
+
     /// Session storage encryption
     pub encrypt_session_storage: bool,
 }
@@ -229,28 +229,28 @@ pub struct SessionHardeningConfig {
 pub struct ApiSecurityConfig {
     /// Enable request signing
     pub enable_request_signing: bool,
-    
+
     /// Request replay prevention window (seconds)
     pub replay_prevention_window: u64,
-    
+
     /// Enable request size limits
     pub enable_size_limits: bool,
-    
+
     /// Maximum request size (bytes)
     pub max_request_size: u64,
-    
+
     /// Enable response filtering
     pub enable_response_filtering: bool,
-    
+
     /// API versioning enforcement
     pub enforce_api_versioning: bool,
-    
+
     /// Content-Type validation
     pub validate_content_type: bool,
-    
+
     /// Enable CORS restrictions
     pub enable_cors_restrictions: bool,
-    
+
     /// Allowed CORS origins
     pub cors_allowed_origins: Vec<String>,
 }
@@ -260,31 +260,31 @@ pub struct ApiSecurityConfig {
 pub struct MonitoringConfig {
     /// Enable security event logging
     pub enable_security_logging: bool,
-    
+
     /// Enable real-time alerting
     pub enable_real_time_alerting: bool,
-    
+
     /// Enable threat detection
     pub enable_threat_detection: bool,
-    
+
     /// Enable anomaly detection
     pub enable_anomaly_detection: bool,
-    
+
     /// Log retention period (days)
     pub log_retention_days: u32,
-    
+
     /// Enable SIEM integration
     pub enable_siem_integration: bool,
-    
+
     /// SIEM endpoints
     pub siem_endpoints: Vec<String>,
-    
+
     /// Enable performance monitoring
     pub enable_performance_monitoring: bool,
-    
+
     /// Enable security metrics dashboard
     pub enable_security_dashboard: bool,
-    
+
     /// Alert thresholds
     pub alert_thresholds: AlertThresholds,
 }
@@ -294,16 +294,16 @@ pub struct MonitoringConfig {
 pub struct AlertThresholds {
     /// Failed login attempts threshold
     pub failed_login_threshold: u32,
-    
+
     /// Suspicious activity threshold
     pub suspicious_activity_threshold: u32,
-    
+
     /// Rate limit violation threshold
     pub rate_limit_violation_threshold: u32,
-    
+
     /// Security policy violation threshold
     pub security_violation_threshold: u32,
-    
+
     /// High-value transaction threshold
     pub high_value_transaction_threshold: u64,
 }
@@ -313,34 +313,34 @@ pub struct AlertThresholds {
 pub struct ComplianceConfig {
     /// Enable SOC 2 compliance
     pub enable_soc2: bool,
-    
+
     /// Enable PCI DSS compliance
     pub enable_pci_dss: bool,
-    
+
     /// Enable GDPR compliance
     pub enable_gdpr: bool,
-    
+
     /// Enable HIPAA compliance
     pub enable_hipaa: bool,
-    
+
     /// Enable CCPA compliance
     pub enable_ccpa: bool,
-    
+
     /// Enable audit logging
     pub enable_audit_logging: bool,
-    
+
     /// Audit log retention (days)
     pub audit_retention_days: u32,
-    
+
     /// Enable data encryption at rest
     pub enable_encryption_at_rest: bool,
-    
+
     /// Enable data encryption in transit
     pub enable_encryption_in_transit: bool,
-    
+
     /// Data residency requirements
     pub data_residency_regions: Vec<String>,
-    
+
     /// Enable right to be forgotten
     pub enable_right_to_be_forgotten: bool,
 }
@@ -359,7 +359,7 @@ impl SecurityHardeningConfig {
                 tls_1_3_only: true,
                 require_pfs: true,
                 hsts_preload: true,
-                hsts_max_age: 63072000, // 2 years
+                hsts_max_age: 63_072_000, // 2 years
                 cert_pinning: true,
                 allowed_ciphers: vec![
                     "TLS_AES_256_GCM_SHA384".to_string(),
@@ -393,7 +393,7 @@ impl SecurityHardeningConfig {
                     require_privileged_rotation: true,
                 },
                 jwt_hardening: JwtHardeningConfig {
-                    access_token_lifetime: 900,  // 15 minutes
+                    access_token_lifetime: 900,   // 15 minutes
                     refresh_token_lifetime: 3600, // 1 hour
                     enable_token_binding: true,
                     enable_token_encryption: true,
@@ -419,7 +419,7 @@ impl SecurityHardeningConfig {
             },
             session: SessionHardeningConfig {
                 session_timeout: 3600, // 1 hour
-                idle_timeout: 1800, // 30 minutes
+                idle_timeout: 1800,    // 30 minutes
                 max_concurrent_sessions: 3,
                 rotation_interval: 900, // 15 minutes
                 secure_cookies: true,
@@ -476,7 +476,7 @@ impl SecurityHardeningConfig {
     /// High-security configuration for sensitive environments
     pub fn high_security() -> Self {
         let mut config = Self::production();
-        
+
         // Enhanced authentication requirements
         config.authentication.require_mfa_all_accounts = true;
         config.authentication.max_login_attempts = 3;
@@ -485,29 +485,32 @@ impl SecurityHardeningConfig {
         config.authentication.password_policy.expiration_days = 60;
         config.authentication.jwt_hardening.access_token_lifetime = 300; // 5 minutes
         config.authentication.jwt_hardening.refresh_token_lifetime = 1800; // 30 minutes
-        
+
         // Stricter session management
         config.session.session_timeout = 1800; // 30 minutes
         config.session.idle_timeout = 600; // 10 minutes
         config.session.max_concurrent_sessions = 1;
         config.session.rotation_interval = 300; // 5 minutes
-        
+
         // Enhanced monitoring
         config.monitoring.alert_thresholds.failed_login_threshold = 3;
-        config.monitoring.alert_thresholds.suspicious_activity_threshold = 1;
-        
+        config
+            .monitoring
+            .alert_thresholds
+            .suspicious_activity_threshold = 1;
+
         // Additional compliance
         config.compliance.enable_pci_dss = true;
         config.compliance.enable_hipaa = true;
         config.compliance.audit_retention_days = 3650; // 10 years
-        
+
         config
     }
 
     /// Development configuration with security but usability
     pub fn development() -> Self {
         let mut config = Self::production();
-        
+
         // Relaxed for development
         config.network.tls_1_3_only = false;
         config.authentication.require_mfa_admin = false;
@@ -515,13 +518,13 @@ impl SecurityHardeningConfig {
         config.authentication.lockout_duration_seconds = 300; // 5 minutes
         config.authentication.jwt_hardening.access_token_lifetime = 3600; // 1 hour
         config.authentication.jwt_hardening.refresh_token_lifetime = 86400; // 24 hours
-        
+
         config.session.session_timeout = 7200; // 2 hours
         config.session.idle_timeout = 3600; // 1 hour
-        
+
         config.monitoring.log_retention_days = 30;
         config.compliance.audit_retention_days = 90;
-        
+
         config
     }
 
@@ -565,7 +568,7 @@ mod tests {
     fn test_high_security_config_validation() {
         let config = SecurityHardeningConfig::high_security();
         assert!(config.validate().is_ok());
-        
+
         // Verify enhanced security settings
         assert!(config.authentication.require_mfa_all_accounts);
         assert_eq!(config.authentication.max_login_attempts, 3);
@@ -576,7 +579,7 @@ mod tests {
     fn test_development_config_validation() {
         let config = SecurityHardeningConfig::development();
         assert!(config.validate().is_ok());
-        
+
         // Verify relaxed settings for development
         assert!(!config.network.tls_1_3_only);
         assert!(!config.authentication.require_mfa_admin);
@@ -586,7 +589,7 @@ mod tests {
     fn test_invalid_config_validation() {
         let mut config = SecurityHardeningConfig::production();
         config.authentication.jwt_hardening.access_token_lifetime = 7200; // 2 hours - too long
-        
+
         assert!(config.validate().is_err());
     }
 }

@@ -34,9 +34,9 @@ use tracing::{error, info, warn};
 use zeroize::{Zeroize};
 
 #[cfg(feature = "post-quantum")]
-use pqcrypto_dilithium::{dilithium2, dilithium3, dilithium5};
+use pqcrypto_mldsa::{mldsa44, mldsa65, mldsa87};  // Updated from dilithium
 #[cfg(feature = "post-quantum")]
-use pqcrypto_kyber::{kyber1024, kyber512, kyber768};
+use pqcrypto_mlkem::{mlkem512, mlkem768, mlkem1024};  // Updated from kyber
 
 #[cfg(feature = "hybrid-crypto")]
 use ed25519_dalek::{SigningKey as Ed25519SigningKey, VerifyingKey as Ed25519VerifyingKey};
@@ -330,21 +330,21 @@ impl PQCryptoManager {
             #[cfg(feature = "post-quantum")]
             PQAlgorithm::Dilithium(level) => match level {
                 SecurityLevel::Level1 => {
-                    let (pk, sk) = dilithium2::keypair();
+                    let (pk, sk) = mldsa44::keypair();
                     Ok(PQKeyData::Dilithium {
                         public_key: pk.as_bytes().to_vec(),
                         private_key: sk.as_bytes().to_vec(),
                     })
                 }
                 SecurityLevel::Level3 => {
-                    let (pk, sk) = dilithium3::keypair();
+                    let (pk, sk) = mldsa65::keypair();
                     Ok(PQKeyData::Dilithium {
                         public_key: pk.as_bytes().to_vec(),
                         private_key: sk.as_bytes().to_vec(),
                     })
                 }
                 SecurityLevel::Level5 => {
-                    let (pk, sk) = dilithium5::keypair();
+                    let (pk, sk) = mldsa87::keypair();
                     Ok(PQKeyData::Dilithium {
                         public_key: pk.as_bytes().to_vec(),
                         private_key: sk.as_bytes().to_vec(),
@@ -541,21 +541,21 @@ impl PQCryptoManager {
             #[cfg(feature = "post-quantum")]
             PQKeyData::Dilithium { private_key, .. } => match key_material.security_level {
                 SecurityLevel::Level1 => {
-                    let sk = dilithium2::SecretKey::from_bytes(private_key)
-                        .map_err(|_| anyhow!("Invalid Dilithium2 private key"))?;
-                    let signature = dilithium2::sign(data, &sk);
+                    let sk = mldsa44::SecretKey::from_bytes(private_key)
+                        .map_err(|_| anyhow!("Invalid MLDSA44 private key"))?;
+                    let signature = mldsa44::sign(data, &sk);
                     Ok(signature.as_bytes().to_vec())
                 }
                 SecurityLevel::Level3 => {
-                    let sk = dilithium3::SecretKey::from_bytes(private_key)
-                        .map_err(|_| anyhow!("Invalid Dilithium3 private key"))?;
-                    let signature = dilithium3::sign(data, &sk);
+                    let sk = mldsa65::SecretKey::from_bytes(private_key)
+                        .map_err(|_| anyhow!("Invalid MLDSA65 private key"))?;
+                    let signature = mldsa65::sign(data, &sk);
                     Ok(signature.as_bytes().to_vec())
                 }
                 SecurityLevel::Level5 => {
-                    let sk = dilithium5::SecretKey::from_bytes(private_key)
-                        .map_err(|_| anyhow!("Invalid Dilithium5 private key"))?;
-                    let signature = dilithium5::sign(data, &sk);
+                    let sk = mldsa87::SecretKey::from_bytes(private_key)
+                        .map_err(|_| anyhow!("Invalid MLDSA87 private key"))?;
+                    let signature = mldsa87::sign(data, &sk);
                     Ok(signature.as_bytes().to_vec())
                 }
             },
@@ -659,25 +659,25 @@ impl PQCryptoManager {
             #[cfg(feature = "post-quantum")]
             PQKeyData::Dilithium { public_key, .. } => match key_material.security_level {
                 SecurityLevel::Level1 => {
-                    let pk = dilithium2::PublicKey::from_bytes(public_key)
-                        .map_err(|_| anyhow!("Invalid Dilithium2 public key"))?;
-                    let sig = dilithium2::DetachedSignature::from_bytes(signature)
-                        .map_err(|_| anyhow!("Invalid Dilithium2 signature"))?;
-                    Ok(dilithium2::verify(&sig, data, &pk).is_ok())
+                    let pk = mldsa44::PublicKey::from_bytes(public_key)
+                        .map_err(|_| anyhow!("Invalid MLDSA44 public key"))?;
+                    let sig = mldsa44::DetachedSignature::from_bytes(signature)
+                        .map_err(|_| anyhow!("Invalid MLDSA44 signature"))?;
+                    Ok(mldsa44::verify(&sig, data, &pk).is_ok())
                 }
                 SecurityLevel::Level3 => {
-                    let pk = dilithium3::PublicKey::from_bytes(public_key)
-                        .map_err(|_| anyhow!("Invalid Dilithium3 public key"))?;
-                    let sig = dilithium3::DetachedSignature::from_bytes(signature)
-                        .map_err(|_| anyhow!("Invalid Dilithium3 signature"))?;
-                    Ok(dilithium3::verify(&sig, data, &pk).is_ok())
+                    let pk = mldsa65::PublicKey::from_bytes(public_key)
+                        .map_err(|_| anyhow!("Invalid MLDSA65 public key"))?;
+                    let sig = mldsa65::DetachedSignature::from_bytes(signature)
+                        .map_err(|_| anyhow!("Invalid MLDSA65 signature"))?;
+                    Ok(mldsa65::verify(&sig, data, &pk).is_ok())
                 }
                 SecurityLevel::Level5 => {
-                    let pk = dilithium5::PublicKey::from_bytes(public_key)
-                        .map_err(|_| anyhow!("Invalid Dilithium5 public key"))?;
-                    let sig = dilithium5::DetachedSignature::from_bytes(signature)
-                        .map_err(|_| anyhow!("Invalid Dilithium5 signature"))?;
-                    Ok(dilithium5::verify(&sig, data, &pk).is_ok())
+                    let pk = mldsa87::PublicKey::from_bytes(public_key)
+                        .map_err(|_| anyhow!("Invalid MLDSA87 public key"))?;
+                    let sig = mldsa87::DetachedSignature::from_bytes(signature)
+                        .map_err(|_| anyhow!("Invalid MLDSA87 signature"))?;
+                    Ok(mldsa87::verify(&sig, data, &pk).is_ok())
                 }
             },
             #[cfg(feature = "hybrid-crypto")]
@@ -894,8 +894,8 @@ impl PQCryptoManager {
             post_quantum_enabled: self.config.enabled,
             hybrid_enabled: self.config.enable_hybrid,
             features_available: PQFeatures {
-                dilithium: cfg!(feature = "post-quantum"),
-                kyber: cfg!(feature = "post-quantum"),
+                mldsa: cfg!(feature = "post-quantum"),
+                mlkem: cfg!(feature = "post-quantum"),
                 hybrid: cfg!(feature = "hybrid-crypto"),
             },
         }
@@ -928,8 +928,8 @@ pub struct MigrationStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PQFeatures {
-    pub dilithium: bool,
-    pub kyber: bool,
+    pub mldsa: bool,
+    pub mlkem: bool,
     pub hybrid: bool,
 }
 

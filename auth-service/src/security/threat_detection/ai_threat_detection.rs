@@ -849,7 +849,11 @@ impl BehavioralAnalyzer {
         })
     }
 
-    async fn analyze_user_behavior(&self, _user_id: &str, _features: &FeatureVector) -> Result<f64> {
+    async fn analyze_user_behavior(
+        &self,
+        _user_id: &str,
+        _features: &FeatureVector,
+    ) -> Result<f64> {
         // Simplified behavioral analysis
         Ok(0.8)
     }
@@ -861,6 +865,18 @@ impl BehavioralAnalyzer {
 
     async fn update_user_profile(&self, _user_id: &str, _features: &FeatureVector) -> Result<()> {
         // Update user behavioral profile
+        Ok(())
+    }
+}
+
+/// Implementation of ThreatDetectionAdapter for BehavioralAnalyzer
+#[async_trait::async_trait]
+impl crate::security::threat_detection::threat_adapter::ThreatDetectionAdapter for BehavioralAnalyzer {
+    async fn process_security_event(
+        &self,
+        _event: &crate::core::security::SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Stub implementation
         Ok(())
     }
 }

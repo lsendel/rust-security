@@ -4,8 +4,7 @@ use crate::security::threat_detection::threat_types::{
     ThreatSeverity, TimingConstraint, TimingConstraintType,
 };
 use chrono::{DateTime, Duration, Utc};
-// TODO: Add petgraph dependency to workspace or implement alternative graph structure
-// use petgraph::{graph::NodeIndex, Directed, Graph};
+use petgraph::{graph::NodeIndex, Directed, Direction, Graph};
 #[cfg(feature = "metrics")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use serde::{Deserialize, Serialize};
@@ -116,18 +115,17 @@ pub struct TemporalAnalysisConfig {
 
 /// Node in the attack graph representing an entity or event
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// TODO: Re-enable when petgraph dependency is available
-// pub struct AttackGraphNode {
-    // pub node_id: String,
-    // pub node_type: AttackNodeType,
-    // pub entity_id: String,
-    // pub first_seen: DateTime<Utc>,
-    // pub last_seen: DateTime<Utc>,
-    // pub event_count: u32,
-    // pub risk_score: f64,
-    // pub attributes: HashMap<String, serde_json::Value>,
-    // pub metadata: AttackNodeMetadata,
-    // }
+pub struct AttackGraphNode {
+    pub node_id: String,
+    pub node_type: AttackNodeType,
+    pub entity_id: String,
+    pub first_seen: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+    pub event_count: u32,
+    pub risk_score: f64,
+    pub attributes: HashMap<String, serde_json::Value>,
+    pub metadata: AttackNodeMetadata,
+}
 
 /// Types of nodes in attack graph
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -154,18 +152,17 @@ pub struct AttackNodeMetadata {
 
 /// Edge in the attack graph representing relationships
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// TODO: Re-enable when petgraph dependency is available
-// pub struct AttackGraphEdge {
-    // pub edge_id: String,
-    // pub edge_type: AttackEdgeType,
-    // pub weight: f64,
-    // pub confidence: f64,
-    // pub first_observed: DateTime<Utc>,
-    // pub last_observed: DateTime<Utc>,
-    // pub observation_count: u32,
-    // pub temporal_pattern: TemporalPattern,
-    // pub attributes: HashMap<String, serde_json::Value>,
-    // }
+pub struct AttackGraphEdge {
+    pub edge_id: String,
+    pub edge_type: AttackEdgeType,
+    pub weight: f64,
+    pub confidence: f64,
+    pub first_observed: DateTime<Utc>,
+    pub last_observed: DateTime<Utc>,
+    pub observation_count: u32,
+    pub temporal_pattern: TemporalPattern,
+    pub attributes: HashMap<String, serde_json::Value>,
+}
 
 /// Types of edges in attack graph
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -809,18 +806,54 @@ impl AttackPatternDetector {
         event_buffer: &VecDeque<SecurityEvent>,
     ) -> Option<DetectedAttackSequence> {
         let config = self.config.read().await;
-        let time_window = Duration::minutes(config.correlation_window_minutes as i64);
-        let cutoff_time = current_event.timestamp - time_window;
 
-        // Get relevant events within time window
-        let relevant_events: Vec<_> = event_buffer
+        // Filter events within correlation window
+        let relevant_events = self.filter_events_by_time_window(
+            event_buffer,
+            current_event.timestamp,
+            config.correlation_window_minutes,
+        );
+
+        // Match and validate event sequence
+        let matched_events = self.match_and_validate_sequence(
+            rule,
+            &relevant_events,
+            current_event,
+            config.min_confidence_threshold,
+        )?;
+
+        // Build the detected attack sequence
+        let sequence = self.build_detected_sequence(rule, &matched_events)?;
+        Some(sequence)
+    }
+
+    /// Filter events within the specified time window
+    fn filter_events_by_time_window(
+        &self,
+        event_buffer: &VecDeque<SecurityEvent>,
+        current_timestamp: DateTime<Utc>,
+        window_minutes: u64,
+    ) -> Vec<SecurityEvent> {
+        let time_window = Duration::minutes(window_minutes as i64);
+        let cutoff_time = current_timestamp - time_window;
+
+        event_buffer
             .iter()
             .filter(|e| e.timestamp > cutoff_time)
             .cloned()
-            .collect();
+            .collect()
+    }
 
+    /// Match event sequence and validate all constraints
+    fn match_and_validate_sequence(
+        &self,
+        rule: &SequenceDetectionRule,
+        relevant_events: &[SecurityEvent],
+        current_event: &SecurityEvent,
+        min_confidence_threshold: f64,
+    ) -> Option<Vec<SecurityEvent>> {
         // Check if the event sequence matches the rule
-        let matched_events = self.match_event_sequence(rule, &relevant_events, current_event)?;
+        let matched_events = self.match_event_sequence(rule, relevant_events, current_event)?;
 
         // Verify entity requirements
         if !self.check_entity_requirements(&rule.required_entities, &matched_events) {
@@ -832,17 +865,24 @@ impl AttackPatternDetector {
             return None;
         }
 
-        // Calculate confidence and completeness
+        // Calculate and validate confidence
         let confidence =
             rule.confidence_weight * self.calculate_sequence_confidence(&matched_events);
-        if confidence < config.min_confidence_threshold {
+        if confidence < min_confidence_threshold {
             return None;
         }
 
-        let completeness = matched_events.len() as f64 / rule.event_sequence.len() as f64;
+        Some(matched_events)
+    }
 
-        // Create attack pattern
-        let attack_pattern = AttackPattern {
+    /// Build attack pattern from rule and matched events
+    fn build_attack_pattern(
+        &self,
+        rule: &SequenceDetectionRule,
+        matched_events: &[SecurityEvent],
+        confidence: f64,
+    ) -> Option<AttackPattern> {
+        Some(AttackPattern {
             pattern_id: rule.rule_id.clone(),
             pattern_name: rule.name.clone(),
             description: rule.description.clone(),
@@ -865,30 +905,41 @@ impl AttackPatternDetector {
             ],
             false_positive_rate: 0.1,
             related_patterns: Vec::new(),
-        };
+        })
+    }
 
-        // Create detected sequence
-        let sequence = DetectedAttackSequence {
+    /// Build complete detected attack sequence
+    fn build_detected_sequence(
+        &self,
+        rule: &SequenceDetectionRule,
+        matched_events: &[SecurityEvent],
+    ) -> Option<DetectedAttackSequence> {
+        let confidence =
+            rule.confidence_weight * self.calculate_sequence_confidence(matched_events);
+        let completeness = matched_events.len() as f64 / rule.event_sequence.len() as f64;
+        let attack_pattern = self.build_attack_pattern(rule, matched_events, confidence)?;
+
+        let first_event = matched_events.first()?;
+        let last_event = matched_events.last()?;
+
+        Some(DetectedAttackSequence {
             sequence_id: Uuid::new_v4().to_string(),
             pattern_id: rule.rule_id.clone(),
             attack_pattern,
-            matched_events: matched_events.clone(),
+            matched_events: matched_events.to_vec(),
             confidence,
             completeness,
             risk_score: (confidence * 100.0 * rule.severity_modifier) as u8,
-            first_event: matched_events.first()?.timestamp,
-            last_event: matched_events.last()?.timestamp,
-            duration_minutes: matched_events
-                .last()?
+            first_event: first_event.timestamp,
+            last_event: last_event.timestamp,
+            duration_minutes: last_event
                 .timestamp
-                .signed_duration_since(matched_events.first()?.timestamp)
+                .signed_duration_since(first_event.timestamp)
                 .num_minutes(),
-            affected_entities: self.extract_affected_entities(&matched_events),
-            kill_chain_coverage: self.analyze_kill_chain_coverage(&matched_events),
-            prediction: self.generate_attack_prediction(&matched_events, rule),
-        };
-
-        Some(sequence)
+            affected_entities: self.extract_affected_entities(matched_events),
+            kill_chain_coverage: self.analyze_kill_chain_coverage(matched_events),
+            prediction: self.generate_attack_prediction(matched_events, rule),
+        })
     }
 
     /// Match event sequence against rule pattern

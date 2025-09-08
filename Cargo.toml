@@ -85,13 +85,15 @@ deadpool = "0.12"
 bb8 = "0.8"
 
 # ===== CACHING & REDIS =====
-redis = { version = "0.27", features = ["aio", "connection-manager", "tokio-comp"] }
+redis = { version = "0.32", features = ["aio", "connection-manager", "tokio-comp"] }
 deadpool-redis = "0.22"
 bb8-redis = "0.17"
 
 # ===== MONITORING & TELEMETRY =====
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio-util = { version = "0.7", features = ["time"] }
+
 tracing-appender = "0.2"
 opentelemetry = { version = "0.26", features = ["metrics"] }
 prometheus = "0.14"
@@ -171,6 +173,10 @@ regex = "1.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.13"
 tokio-test = "0.4"
+wiremock = "0.6"
+
+# ===== MACHINE LEARNING =====
+smartcore = "0.3"
 
 # ===== CLOUD INTEGRATIONS =====
 aws-config = "1.1"

@@ -34,3 +34,6 @@ pub use request_id::request_id_middleware;
 
 // CSRF middleware
 pub mod csrf;
+
+// Security integration (comprehensive security stack)
+pub mod security_integration;

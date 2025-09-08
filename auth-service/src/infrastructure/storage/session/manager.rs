@@ -1,10 +1,10 @@
 // Secure session management with Redis backend and security features
+#[cfg(feature = "monitoring")]
+use crate::infrastructure::monitoring::security_metrics::SECURITY_METRICS;
 use crate::infrastructure::security::security_logging::{
     SecurityEvent, SecurityEventType, SecurityLogger, SecurityLoggerConfig, SecuritySeverity,
 };
 use crate::pii_protection::redact_log;
-#[cfg(feature = "monitoring")]
-use crate::infrastructure::monitoring::security_metrics::SECURITY_METRICS;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
