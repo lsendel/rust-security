@@ -7,7 +7,7 @@ import { ErrorBoundary } from 'react-error-boundary'
 import App from './App'
 import { ErrorFallback } from './components/ui/error-boundary'
 import { Toaster } from './components/ui/toaster'
-import './index.css'
+import '../../../../common/static/css/main.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

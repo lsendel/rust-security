@@ -134,7 +134,7 @@ async fn load_compliance_config(config_path: &str) -> Result<ComplianceConfig> {
 
     // Try YAML first, then JSON
     if config_path.ends_with(".yaml") || config_path.ends_with(".yml") {
-        let config: ComplianceConfig = serde_yaml::from_str(&config_content)?;
+        let config: ComplianceConfig = serde_yml::from_str(&config_content)?;
         Ok(config)
     } else {
         let config: ComplianceConfig = serde_json::from_str(&config_content)?;

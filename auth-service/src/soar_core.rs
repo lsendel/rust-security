@@ -2162,9 +2162,34 @@ Case ID: {{case_id}}
         for (name, integration_config) in &config.integrations {
             if integration_config.enabled {
                 info!("Initializing integration: {}", name);
-                // TODO: Create and register integration instances
-                // This would involve creating specific integration implementations
-                // based on the integration type and configuration
+                let integration: Box<dyn Integration + Send + Sync> =
+                    match integration_config.integration_type {
+                        IntegrationType::Siem => {
+                            Box::new(crate::soar_integrations::MockIntegration::new(
+                                name,
+                                IntegrationType::Siem,
+                            ))
+                        }
+                        IntegrationType::Edr => {
+                            Box::new(crate::soar_integrations::MockIntegration::new(
+                                name,
+                                IntegrationType::Edr,
+                            ))
+                        }
+                        IntegrationType::Firewall => {
+                            Box::new(crate::soar_integrations::MockIntegration::new(
+                                name,
+                                IntegrationType::Firewall,
+                            ))
+                        }
+                        _ => {
+                            warn!("Unsupported integration type: {:?}", integration_config.integration_type);
+                            continue;
+                        }
+                    };
+                self.integration_framework
+                    .integrations
+                    .insert(name.clone(), integration);
             }
         }
 

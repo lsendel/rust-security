@@ -1,27 +1,17 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { SimplePage } from '@/components/layout/simple-page'
 
 export function SecurityOperations() {
   return (
-    <div className="flex-1 space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Security Operations Center</h1>
-        <p className="text-muted-foreground">
-          Security operations management and incident response workflows
-        </p>
+    <SimplePage
+      title="Security Operations Center"
+      description="Security operations management and incident response workflows"
+      cardTitle="SOC Dashboard"
+      cardDescription="Coming soon..."
+    >
+      <div className="text-center py-12 text-muted-foreground">
+        <Badge variant="outline">Under Development</Badge>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>SOC Dashboard</CardTitle>
-          <CardDescription>Coming soon...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-12 text-muted-foreground">
-            <Badge variant="outline">Under Development</Badge>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </SimplePage>
   )
 }

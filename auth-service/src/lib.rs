@@ -158,6 +158,8 @@ pub mod soar_correlation;
 #[cfg(feature = "soar")]
 pub mod soar_executors;
 #[cfg(feature = "soar")]
+pub mod soar_integrations;
+#[cfg(feature = "soar")]
 pub mod soar_workflow;
 
 // Performance Optimization Modules (behind feature flag to avoid pulling heavy deps in default tests)
