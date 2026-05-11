@@ -81,7 +81,7 @@ constant_time_eq = "0.3"
 
 # ===== DATABASE =====
 sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros", "runtime-tokio-rustls"], default-features = false }
-deadpool = "0.12"
+deadpool = "0.13"
 bb8 = "0.8"
 
 # ===== CACHING & REDIS =====
