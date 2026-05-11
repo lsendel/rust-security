@@ -135,7 +135,7 @@ crossbeam = "0.8"
 rayon = "1.10"
 
 # ===== CONFIGURATION =====
-config = { version = "0.14", default-features = false, features = ["json", "yaml", "toml"] }
+config = { version = "0.15", default-features = false, features = ["json", "yaml", "toml"] }
 dotenvy = "0.15"
 
 # ===== VALIDATION =====
