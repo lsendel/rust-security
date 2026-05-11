@@ -181,7 +181,7 @@ smartcore = "0.3"
 # ===== CLOUD INTEGRATIONS =====
 aws-config = "1.1"
 aws-sdk-secretsmanager = "1.10"
-vaultrs = "0.7"
+vaultrs = "0.8"
 
 # ===== WEB SERVER =====
 axum-server = "0.7"
