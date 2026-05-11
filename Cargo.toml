@@ -187,7 +187,7 @@ vaultrs = "0.7"
 axum-server = "0.7"
 
 # ===== ADDITIONAL DEPENDENCIES =====
-petgraph = "0.6"
+petgraph = "0.8"
 # bcrypt = "0.15"  # Duplicate removed - defined above in cryptography section
 ipnetwork = "0.20"
 derive_more = "0.99"
