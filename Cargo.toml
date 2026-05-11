@@ -64,7 +64,7 @@ anyhow = "1.0"
 thiserror = "2.0"
 
 # ===== CRYPTOGRAPHY & SECURITY =====
-jsonwebtoken = "9.3"
+jsonwebtoken = "10.3"
 rand = "0.8"
 sha2 = "0.10"
 aes = "0.8"
