@@ -190,7 +190,7 @@ axum-server = "0.7"
 petgraph = "0.6"
 # bcrypt = "0.15"  # Duplicate removed - defined above in cryptography section
 ipnetwork = "0.20"
-derive_more = "0.99"
+derive_more = "2.1"
 lazy_static = "1.5"
 
 [profile.dev]
