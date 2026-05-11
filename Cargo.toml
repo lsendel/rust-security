@@ -73,7 +73,7 @@ argon2 = "0.5"
 bcrypt = "0.15"
 chacha20poly1305 = "0.10"
 ring = "0.17"
-hmac = "0.12"
+hmac = "0.13"
 secrecy = "0.10"
 subtle = "2.6"
 zeroize = { version = "1.8", features = ["derive"] }
