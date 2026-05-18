@@ -106,7 +106,7 @@ urlencoding = { workspace = true }
 tokio-test = { workspace = true }
 regex = { workspace = true }
 tempfile = { workspace = true }
-proptest = "1.5"
+proptest = "1.11"
 sha1 = "0.10"
 libc = "0.2"
 wiremock = "0.6"
